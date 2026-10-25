@@ -1,0 +1,31 @@
+%%{init: {'theme': 'base', 'sequence': {'mirrorActors': false}, 'themeVariables': {'background': '#ffffff', 'primaryColor': '#ffffff', 'primaryTextColor': '#000000', 'primaryBorderColor': '#000000', 'lineColor': '#000000', 'actorBkg': '#ffffff', 'actorBorder': '#000000', 'actorTextColor': '#000000', 'signalColor': '#000000', 'signalTextColor': '#000000', 'labelBoxBkgColor': '#ffffff', 'labelBoxBorderColor': '#000000', 'labelTextColor': '#000000', 'loopTextColor': '#000000', 'noteBkgColor': '#ffffff', 'noteBorderColor': '#000000', 'noteTextColor': '#000000', 'activationBkgColor': '#ffffff', 'activationBorderColor': '#000000'}}}%%
+sequenceDiagram
+    actor R as Rédacteur A
+    actor R2 as Autre rédacteur connecté
+    participant E as Éditeur web
+    participant W as API WebSocket
+    participant C as Service collaboratif
+    participant D as Stockage métier
+
+    R->>E: Insérer du texte
+    E->>E: Produire une opération CRDT unique
+    E->>W: Envoyer(operationId, documentId, update)
+    W->>C: Transmettre l'opération
+    C->>D: Vérifier autorisation et blocage
+    D-->>C: Autorisé, non bloqué
+    C->>C: Calculer les caractères insérés
+    C->>D: Transaction: débit crédit + opération + révision
+    alt crédit disponible et opération nouvelle
+        D-->>C: Transaction validée
+        C-->>W: Opération acceptée(revision)
+        W-->>E: Accusé durable
+        C->>W: Diffuser(update, revision) aux connexions du document
+        W-->>R2: Mise à jour(update, revision)
+    else crédit insuffisant
+        D-->>C: Condition refusée
+        C-->>E: Rejet(CREDIT_EPUISE)
+    else opération déjà reçue
+        D-->>C: Résultat idempotent existant
+        C-->>E: Réponse acceptée précédente
+    end
+

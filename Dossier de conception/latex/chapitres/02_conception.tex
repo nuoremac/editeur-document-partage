@@ -1,0 +1,263 @@
+\chapter{Conception}
+
+\section{Architecture générale}
+La conception sépare le plan collaboratif du plan de diffusion publique. Le pic de visiteurs ne doit donc pas monopoliser les ressources responsables des opérations d'édition. L'application repose sur un backend Node.js exécuté sur EC2. La génération des PDF est découplée par SQS afin que les requêtes publiques restent courtes.
+
+
+\diagramme{ArchitectureGeneral.drawio}{Architecture logique proposée}{fig:2}
+
+\begingroup\small\setlength{\tabcolsep}{3pt}\renewcommand{\arraystretch}{1.25}
+\begin{longtable}{|P{0.26\textwidth}|P{0.69\textwidth}|}
+\caption{Responsabilités des composants logiques}\\
+\hline
+Composant logique & Responsabilité \\ \hline
+\endfirsthead
+\hline
+Composant logique & Responsabilité \\ \hline
+\endhead
+\endfoot
+
+Application React & Édition Quill, affichage des présences, gestion des liens et consultation administrative. \\ \hline
+
+API Express & Documents, membres, versions, liens, réservations et administration. \\ \hline
+
+Serveur WebSocket Yjs & Connexions persistantes, présence, curseurs, validation et diffusion des opérations. \\ \hline
+
+Service collaboratif & Validation, idempotence, persistance et convergence des opérations CRDT. \\ \hline
+
+Service de publication & Réservation atomique, capture de révision et suivi du statut. \\ \hline
+
+Générateur PDF & Transformation d'une révision immuable en fichier PDF stocké dans S3. \\ \hline
+
+PostgreSQL & Métadonnées, opérations, crédits, liens, réservations et blocages. \\ \hline
+
+File SQS & Découplage et absorption du pic de génération. \\ \hline
+
+Supervision & Journaux, métriques, alarmes et état opérationnel. \\ \hline
+
+\end{longtable}\endgroup
+
+\subsection{Grille technologique retenue}
+
+\begingroup\small\setlength{\tabcolsep}{3pt}\renewcommand{\arraystretch}{1.25}
+\begin{longtable}{|P{0.19\textwidth}|P{0.29\textwidth}|P{0.43\textwidth}|}
+\caption{Technologies proposées et rôle dans la solution}\\
+\hline
+Besoin & Technologie & Utilisation dans le projet \\ \hline
+\endfirsthead
+\hline
+Besoin & Technologie & Utilisation dans le projet \\ \hline
+\endhead
+\endfoot
+
+Interface web & React + Vite & Construire et servir l'interface du rédacteur, du visiteur et de l'administrateur. \\ \hline
+
+Éditeur collaboratif & Quill + Yjs + \texttt{y-quill} & Éditer du texte partagé et synchroniser les opérations concurrentes avec un CRDT. \\ \hline
+
+API métier & Node.js + TypeScript + Express & Fournir les routes HTTP pour les documents, les droits, les versions, les crédits et les liens. \\ \hline
+
+Temps réel & Serveur WebSocket Yjs personnalisé & Gérer les connexions, la présence, les curseurs, la validation métier et la diffusion des opérations. \\ \hline
+
+Base de données & PostgreSQL sur Amazon RDS & Conserver les données métier et exécuter les transactions atomiques des quotas et des crédits. \\ \hline
+
+Travaux PDF & Amazon SQS & Mettre en file les demandes de génération pour que l'API réponde rapidement pendant les pics. \\ \hline
+
+Fichiers & Amazon S3 & Conserver les instantanés de versions et les PDF ; fournir un accès temporaire après autorisation. \\ \hline
+
+Calcul AWS & Amazon EC2 + rôle IAM & Héberger l'API, le serveur WebSocket et le worker PDF ; autoriser les seuls accès AWS nécessaires sans clé dans le code. \\ \hline
+
+Développement local & Docker Compose & Démarrer ensemble le backend et PostgreSQL pour développer et tester avant le déploiement. \\ \hline
+
+Courriels et supervision & Amazon SES + CloudWatch & Envoyer l'avis du dernier exemplaire, puis centraliser les journaux et métriques utiles. \\ \hline
+
+\end{longtable}\endgroup
+
+En production, Nginx sur EC2 sert l'application web et transmet les requêtes HTTP et WebSocket au backend. PostgreSQL est hébergé séparément dans RDS. Le worker PDF consomme les messages SQS et dépose les fichiers dans S3. L'instance utilise un rôle IAM limité aux opérations nécessaires sur SQS, S3, SES et CloudWatch ; aucune clé AWS n'est placée dans le dépôt \cite{awsec2iam}.
+
+
+\section{Conception statique et modèle de données}
+\diagramme{ClasseMetier.drawio}{Classes, associations et multiplicités}{fig:3}
+
+\subsection{Description des classes principales}
+
+\begingroup\small\setlength{\tabcolsep}{3pt}\renewcommand{\arraystretch}{1.25}
+\begin{longtable}{|P{.28\textwidth}|P{.34\textwidth}|P{.31\textwidth}|}
+\caption{Classes du domaine et responsabilités}\\
+\hline
+Classe & Responsabilité & Attributs essentiels \\ \hline
+\endfirsthead
+\hline
+Classe & Responsabilité & Attributs essentiels \\ \hline
+\endhead
+\endfoot
+
+Rédacteur & Représente l'identité déclarée d'un contributeur. & id, nom, e-mail, date de création \\ \hline
+
+Document & Regroupe les métadonnées et désigne la révision courante. & id, titre, propriétaire, révision courante \\ \hline
+
+Autorisation\allowbreak Document & Associe un rédacteur à un document et à un rôle. & documentId, rédacteurId, rôle \\ \hline
+
+OpérationEdition & Décrit une mise à jour CRDT immuable et idempotente. & operationId, documentId, auteurId, charge utile, date \\ \hline
+
+VersionDocument & Représente un état stable consultable ou restaurable. & versionId, documentId, révision, objet S3, auteur, date \\ \hline
+
+CréditJournalier & Comptabilise atomiquement les caractères acceptés. & rédacteurId, date, utilisés, limite \\ \hline
+
+Lien\allowbreak Téléchargement & Conserve la limite, le solde et l'état du lien. & linkId, limite, restant, état, créateur \\ \hline
+
+Réservation & Matérialise une autorisation unique liée à une révision. & reservationId, linkId, versionId, état, date \\ \hline
+
+PDF & Référence l'objet produit et son empreinte. & pdfId, versionId, clé S3, hash, date \\ \hline
+
+Blocage & Décrit la période et la cause d'un blocage temporaire. & rédacteurId, début, fin, raison \\ \hline
+
+Notification & Conserve l'événement final unique et l'état des tentatives d'envoi. & notificationId, linkId, état, date \\ \hline
+
+\end{longtable}\endgroup
+
+\subsection{Principes de stockage}
+
+\begin{itemize}
+\item Les opérations et réservations possèdent un identifiant idempotent fourni ou confirmé par le serveur.
+\item Les compteurs critiques sont modifiés par condition ou transaction atomique.
+\item Les versions utilisées pour produire un PDF sont immuables.
+\item Les charges binaires volumineuses, les instantanés et les PDF sont stockés dans S3. Les métadonnées restent dans la base.
+\item Les informations de présence et de curseur sont éphémères et ne font pas partie de l'historique métier.
+\end{itemize}
+
+\subsection{Index d'accès attendus}
+
+\begingroup\small\setlength{\tabcolsep}{3pt}\renewcommand{\arraystretch}{1.25}
+\begin{longtable}{|P{0.26\textwidth}|P{0.69\textwidth}|}
+\caption{Accès aux données et clés de recherche}\\
+\hline
+Besoin & Clé principale ou index attendu \\ \hline
+\endfirsthead
+\hline
+Besoin & Clé principale ou index attendu \\ \hline
+\endhead
+\endfoot
+
+Charger un document et ses opérations & documentId puis numéro de révision/horodatage \\ \hline
+
+Trouver les documents d'un rédacteur & rédacteurId via les autorisations \\ \hline
+
+Réserver sur un lien & linkId avec mise à jour conditionnelle PostgreSQL du solde \\ \hline
+
+Charger le crédit du jour & rédacteurId + date de période \\ \hline
+
+Lister les blocages actifs & état + date de fin \\ \hline
+
+\end{longtable}\endgroup
+
+\section{Conception dynamique}
+\subsection{Acceptation d'une modification collaborative}
+
+\diagramme{SequenceTechniqueEdition.drawio}{Validation, persistance et diffusion d'une opération}{fig:4}
+
+La confirmation retournée au client signifie que l'opération a franchi les contrôles d'accès et de crédit et qu'elle a été enregistrée durablement. Une diffusion WebSocket non reçue ne supprime donc pas l'opération : un client reconnecté récupère les opérations manquantes à partir de sa dernière révision connue.
+
+
+\subsection{Réservation et téléchargement}
+
+\diagramme{SequenceTechniqueTelechargement.drawio}{Réservation atomique, génération et livraison}{fig:5}
+
+\subsection{Création d'un lien limité}
+
+\diagramme{11_sequence_creation_lien_limite}{Création d'un lien de téléchargement limité}{fig:11}
+
+\subsection{Cycle de vie d'un lien}
+
+\diagramme{07_etats_lien}{Cycle de vie du lien limité}{fig:7}
+
+\section{Conception des mécanismes critiques}
+\subsection{Réservation atomique}
+
+\begin{quote}
+\small\ttfamily\raggedright
+fonction reserver(linkId, reservationId):\par
+\hspace*{1em}commencer transaction\par
+\hspace*{1em}retrouver le résultat si reservationId existe déjà\par
+\hspace*{1em}vérifier la révision courante à capturer\par
+\hspace*{1em}décrémenter restant si état = ACTIF et restant > 0\par
+\hspace*{1em}créer Réservation(reservationId, revisionCapturee)\par
+\hspace*{1em}si le nouveau solde vaut 0:\par
+\hspace*{1em}\hspace*{1em}passer le lien à ÉPUISÉ\par
+\hspace*{1em}\hspace*{1em}créer l'événement LAST\_COPY avec une clé idempotente\par
+\hspace*{1em}valider transaction\par
+\hspace*{1em}retourner la réservation
+\end{quote}
+
+L'invariant est \texttt{0 \ensuremath{\leq} restant \ensuremath{\leq} limiteInitiale}. La lecture du solde suivie d'une écriture séparée est interdite, car deux requêtes pourraient observer le même dernier exemplaire.
+
+
+\subsection{Convergence des éditions}
+
+Chaque client produit une mise à jour CRDT. Les mises à jour possèdent des identifiants uniques, sont commutatives ou fusionnées suivant les règles de la bibliothèque, puis conservées avant confirmation. Le serveur ne remplace jamais le document entier par le dernier texte reçu. Des instantanés périodiques réduisent le temps de reconstruction sans supprimer le journal nécessaire à la reprise.
+
+
+\begin{quote}
+\small\ttfamily\raggedright
+fonction accepterOperation(opération):\par
+\hspace*{1em}vérifier autorisation et blocage\par
+\hspace*{1em}si operationId existe: retourner le résultat précédent\par
+\hspace*{1em}calculer le nombre de caractères insérés\par
+\hspace*{1em}transaction : débit crédit + opération + révision\par
+\hspace*{1em}confirmer au client\par
+\hspace*{1em}diffuser aux connexions du document
+\end{quote}
+
+\textbf{Risque à tester :} le calcul du nombre exact de caractères insérés à partir d'une mise à jour Yjs doit être vérifié sur la plateforme. Si l'analyse fiable de la mise à jour côté serveur s'avère trop coûteuse, le protocole d'édition devra transmettre une représentation vérifiable des insertions, sans faire confiance au compteur annoncé par le navigateur.
+
+
+\subsection{Crédit journalier}
+
+Le crédit est identifié par le couple rédacteur/période. La mise à jour n'est autorisée que si \texttt{utilisés + coût \ensuremath{\leq} 10 000}. Deux appareils ne peuvent donc pas valider simultanément deux opérations utilisant le même solde. Les suppressions ont un coût nul et ne diminuent pas la valeur déjà utilisée.
+
+
+\subsection{Cohérence du PDF}
+
+La réservation référence une version immuable. Le générateur lit uniquement cette version, produit le PDF, calcule son empreinte et écrit le fichier dans S3. Une correction concurrente crée une révision ultérieure. Elle ne peut pas modifier le fichier en cours de génération. Une demande suivante capturera la nouvelle révision sans changement du lien public.
+
+
+\subsection{Idempotence}
+
+Les navigateurs, files et processus peuvent répéter une requête. Les opérations d'édition, réservations, générations et événements de notification possèdent donc une clé d'idempotence. Une répétition retourne ou poursuit le traitement existant au lieu de consommer un nouveau quota. La livraison de l'e-mail reste soumise aux garanties du fournisseur, comme précisé à la section~\ref{sec:formalisation}.
+
+\subsection{Publication durable des travaux}
+Une réservation validée ne doit pas rester bloquée si le service s'interrompt avant de transmettre le travail PDF. La transaction conserve donc aussi une intention durable de génération, identifiée par la réservation. Un relais reprend les intentions non transmises et alimente la file. Le consommateur reconnaît les travaux déjà terminés et renvoie leur résultat. Le même principe s'applique à l'événement du dernier exemplaire. Une surveillance signale les réservations en attente au-delà du délai attendu.
+
+\subsection{Restauration pendant une session collaborative}
+La restauration prépare une transformation vers la version choisie à partir de la révision courante. Sa validation vérifie que cette révision n'a pas changé et que le crédit couvre les réinsertions. Si une édition concurrente a été acceptée, la préparation est recommencée et le rédacteur est informé du conflit. Une restauration acceptée crée une révision supplémentaire et conserve les opérations antérieures. Elle ne supprime pas le journal. Les autres clients reçoivent les opérations de restauration par le canal collaboratif habituel.
+
+\subsection{Opérations refusées et reprise du client}
+Le client distingue les changements locaux en attente de l'état confirmé. Un rejet pour crédit insuffisant ne doit pas laisser une opération non autorisée intégrée dans l'état partagé. La plateforme devra valider soit une application locale différée jusqu'à confirmation, soit une reconstruction depuis l'état confirmé avec conservation du texte refusé dans un brouillon local. La diffusion et la persistance de ces changements restent interdites tant que leur validation n'a pas réussi.
+
+
+\section{Conception des composants}
+\diagramme{Composants.drawio}{Composants logiciels et interfaces}{fig:8}
+
+\begingroup\small\setlength{\tabcolsep}{3pt}\renewcommand{\arraystretch}{1.25}
+\begin{longtable}{|P{.18\textwidth}|P{.24\textwidth}|P{.22\textwidth}|P{.27\textwidth}|}
+\caption{Interfaces entre composants}\\
+\hline
+Interface & Fournisseur & Consommateur & Responsabilité \\ \hline
+\endfirsthead
+\hline
+Interface & Fournisseur & Consommateur & Responsabilité \\ \hline
+\endhead
+\endfoot
+
+Documents HTTP & API métier & Application web & Créer, partager, versionner et restaurer. \\ \hline
+
+Collaboration WS & Service collaboratif & Éditeur web & Échanger opérations, présence et curseurs. \\ \hline
+
+Publication HTTP & Service de téléchargement & Visiteur & Réserver, suivre et récupérer. \\ \hline
+
+Travaux PDF & File & Générateur & Transmettre une réservation et une version. \\ \hline
+
+Objets PDF & S3 & Générateur et visiteur autorisé & Conserver et délivrer les fichiers. \\ \hline
+
+Notifications & Service mail & Créateur du lien & Informer du dernier exemplaire. \\ \hline
+
+\end{longtable}\endgroup

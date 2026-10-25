@@ -1,0 +1,28 @@
+\section{Validation et limites}
+
+La validation prévue confronte les mécanismes décrits aux exigences de l'association. Les modèles mathématiques expriment les invariants. Les essais vérifient que les composants réels les préservent face à la concurrence, aux retransmissions et aux interruptions. Aucun résultat de campagne n'est présenté dans cette section.
+
+\subsection{Vérification des six contraintes}
+\begin{enumerate}
+\item \textbf{Quota exact.} Créer un lien de limite $N$, lancer plus de $N$ demandes distinctes concurrentes et retransmettre certaines clés. Vérifier le nombre de réservations uniques, le solde, les réponses et l'absence de double débit. Rejouer le test avec une panne entre réservation et publication du travail.
+\item \textbf{Convergence et conservation.} Simuler des insertions concurrentes au même emplacement, puis des suppressions et reconnexions. Comparer les états reconstruits depuis le journal et les répliques synchronisées. Dans le scénario d'insertion seule, vérifier la présence de tous les marqueurs acceptés. Dans les autres, comparer le résultat au comportement attendu du protocole.
+\item \textbf{Actualité et cohérence.} Créer un lien, confirmer une correction, puis télécharger avec le même lien. Vérifier le contenu extrait du PDF et l'identifiant de révision. Modifier le document pendant le rendu et contrôler que le fichier entier reste associé à la révision capturée.
+\item \textbf{Crédit partagé.} Partir d'un faible solde et envoyer simultanément des insertions depuis plusieurs appareils sous la même identité. Vérifier la somme des coûts acceptés, le refus des dépassements, l'idempotence et le changement de période serveur.
+\item \textbf{Pic de charge.} Envoyer $15\,000$ demandes, dont $12\,000$ durant la première minute, en maintenant $300$ rédacteurs simulés. Mesurer les statuts, délais, erreurs, profondeur de file et latence d'édition. Une erreur réseau, un dépassement de délai ou un refus technique brut ne vaut pas réponse fonctionnelle conforme.
+\item \textbf{Épuisement rapide.} Mesurer le délai de notification des visiteurs sans réservation après le dernier exemplaire. Vérifier l'absence de nouveaux travaux non autorisés, la poursuite des travaux déjà réservés et la création d'un seul événement logique de notification.
+\end{enumerate}
+
+Chaque scénario conserve sa configuration, ses horodatages, ses clés de requête, les opérations acceptées et les résultats bruts. La répétition des essais et la comparaison des invariants permettent de délimiter la portée de la validation. La réussite d'un test ne prouve pas l'absence de tout défaut en dehors des conditions explorées.
+
+\subsection{Limites}
+
+\subsubsection{Risques identifiés}
+
+\begin{itemize}
+\item Le coût en caractères d'une mise à jour CRDT doit être mesuré côté serveur sans confiance excessive dans le client.
+\item Une identité déclarative permet l'usurpation et limite la portée du blocage.
+\item Le scénario complet de 15 000 visiteurs peut nécessiter un générateur de charge distribué.
+\item Les limites et quotas initiaux du compte AWS doivent être vérifiés avant la campagne de charge.
+\item Une réservation consommée dont le transfert est abandonné n'est pas restituée. Cette règle favorise l'exactitude plutôt que l'optimisation commerciale.
+\item La présence et les curseurs sont indicatifs : une déconnexion brutale peut rester visible jusqu'à expiration.
+\end{itemize}

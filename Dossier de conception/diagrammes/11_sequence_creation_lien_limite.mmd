@@ -1,0 +1,24 @@
+%%{init: {'theme': 'base', 'sequence': {'mirrorActors': false}, 'themeVariables': {'background': '#ffffff', 'primaryColor': '#ffffff', 'primaryTextColor': '#000000', 'primaryBorderColor': '#000000', 'lineColor': '#000000', 'secondaryColor': '#ffffff', 'tertiaryColor': '#ffffff', 'actorBkg': '#ffffff', 'actorBorder': '#000000', 'actorTextColor': '#000000', 'signalColor': '#000000', 'signalTextColor': '#000000', 'labelBoxBkgColor': '#ffffff', 'labelBoxBorderColor': '#000000', 'labelTextColor': '#000000', 'loopTextColor': '#000000', 'noteBkgColor': '#ffffff', 'noteBorderColor': '#000000', 'noteTextColor': '#000000', 'activationBkgColor': '#ffffff', 'activationBorderColor': '#000000'}}}%%
+sequenceDiagram
+    actor R as Rédacteur
+    participant UI as Interface web
+    participant API as API de publication
+    participant DB as Stockage métier
+
+    R->>UI: Choisir un document et une limite L
+    UI->>API: Créer un lien(documentId, L)
+    API->>API: Vérifier que L est un entier strictement positif
+    API->>DB: Vérifier les droits du rédacteur sur le document
+    DB-->>API: Résultat de la vérification
+
+    alt Droits suffisants et limite valide
+        API->>DB: Enregistrer le lien(documentId, créateurId, limiteInitiale=L, restant=L)
+        DB-->>API: Lien créé(linkId)
+        API-->>UI: Retourner l'URL du lien
+        UI-->>R: Afficher l'URL à partager
+    else Limite invalide ou droits insuffisants
+        API-->>UI: Retourner une erreur explicite
+        UI-->>R: Afficher la raison du refus
+    end
+
+    Note over API,DB: Le lien est créé avec un quota initial L ; chaque réservation acceptée le décrémentera ensuite.

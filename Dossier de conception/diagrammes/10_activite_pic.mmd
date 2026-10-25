@@ -1,0 +1,26 @@
+%%{init: {'theme': 'base', 'sequence': {'mirrorActors': false}, 'themeVariables': {'background': '#ffffff', 'primaryColor': '#ffffff', 'primaryTextColor': '#000000', 'primaryBorderColor': '#000000', 'lineColor': '#000000', 'secondaryColor': '#ffffff', 'tertiaryColor': '#ffffff', 'actorBkg': '#ffffff', 'actorBorder': '#000000', 'actorTextColor': '#000000', 'signalColor': '#000000', 'signalTextColor': '#000000', 'labelBoxBkgColor': '#ffffff', 'labelBoxBorderColor': '#000000', 'labelTextColor': '#000000', 'loopTextColor': '#000000', 'noteBkgColor': '#ffffff', 'noteBorderColor': '#000000', 'noteTextColor': '#000000', 'activationBkgColor': '#ffffff', 'activationBorderColor': '#000000', 'stateBkg': '#ffffff', 'stateBorder': '#000000', 'stateTextColor': '#000000', 'transitionColor': '#000000', 'transitionLabelColor': '#000000'}}}%%
+flowchart TD
+    START(["Demande visiteur"])
+    VALID{"Lien valide ?"}
+    RESERVE{"Réservation atomique réussie ?"}
+    PDF{"PDF de la version disponible ?"}
+    READY["Répondre READY avec accès temporaire"]
+    QUEUE["Placer un travail PDF dans la file"]
+    WAIT["Répondre QUEUED avec identifiant de suivi"]
+    EXHAUSTED["Répondre EXHAUSTED"]
+    INVALID["Répondre LINK_NOT_FOUND"]
+    LAST{"Solde devenu zéro ?"}
+    EVENT["Créer l'événement LAST_COPY"]
+    STOP["Refuser les demandes suivantes sans génération"]
+    END(["Fin de la requête"])
+
+    START --> VALID
+    VALID -- non --> INVALID --> END
+    VALID -- oui --> RESERVE
+    RESERVE -- non --> EXHAUSTED --> STOP --> END
+    RESERVE -- oui --> LAST
+    LAST -- oui --> EVENT --> PDF
+    LAST -- non --> PDF
+    PDF -- oui --> READY --> END
+    PDF -- non --> QUEUE --> WAIT --> END
+

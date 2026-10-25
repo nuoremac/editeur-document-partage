@@ -1,0 +1,10 @@
+# Fichiers temporaires des éditeurs et suites bureautiques
+.~lock.*#
+*~
+*.swp
+*.swo
+
+# Le rapport est géré en LaTeX ; ignorer les copies Word et archives de travail.
+/Dossier de conception/*.docx
+/Dossier de conception/*.html
+/Dossier de conception/*.zip

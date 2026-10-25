@@ -1,0 +1,67 @@
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\IfFileExists{french.ldf}{%
+  \usepackage[english,french]{babel}%
+}{%
+  \usepackage[english]{babel}%
+  \babelprovide[import,main]{french}%
+}
+\providecommand{\ieme}{\textsuperscript{e}}
+\addto\captionsfrench{\renewcommand{\tablename}{Tableau}\renewcommand{\listtablename}{Liste des tableaux}}
+\usepackage{lmodern}
+\usepackage[a4paper,top=2.5cm,bottom=2.5cm,left=2.5cm,right=2.5cm,headheight=16pt]{geometry}
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{array,longtable,booktabs}
+\newcolumntype{P}[1]{>{\raggedright\arraybackslash}p{#1}}
+\usepackage{amsmath,amssymb}
+\usepackage{setspace}
+\usepackage{indentfirst}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{hyperref}
+\definecolor{bleutitre}{HTML}{075DB5}
+\definecolor{bleusombre}{HTML}{17365D}
+\hypersetup{colorlinks=true,linkcolor=bleusombre,citecolor=bleusombre,urlcolor=bleutitre,pdftitle={Éditeur collaboratif — Cahier d'analyse et de conception},pdfsubject={Cloud Computing — Conception},pdfauthor={}}
+\onehalfspacing
+\setlength{\parindent}{1cm}
+\setlength{\parskip}{4pt}
+\setlength{\emergencystretch}{3em}
+\setlist{nosep,topsep=5pt,leftmargin=*}
+\setlist[description]{style=nextline,leftmargin=1cm,labelindent=0pt,labelwidth=.8cm}
+\setcounter{tocdepth}{2}
+\setcounter{secnumdepth}{2}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small Éditeur collaboratif : conception}
+\fancyhead[R]{\small Cloud Computing}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\fancypagestyle{plain}{\fancyhf{}\fancyfoot[C]{\thepage}\renewcommand{\headrulewidth}{0pt}}
+\titleformat{\chapter}[display]{\normalfont\huge\bfseries\color{bleusombre}}{\chaptertitlename\ \thechapter}{12pt}{\Huge}
+\titlespacing*{\chapter}{0pt}{10pt}{24pt}
+\captionsetup{font=small,labelfont=bf}
+\newcommand{\chapitresansnumero}[1]{\chapter*{#1}\phantomsection\addcontentsline{toc}{chapter}{#1}}
+% Les sources Mermaid restent dans ../diagrammes. Exporter en PDF ou PNG
+% avec le même nom de base dans images/ : le cadre est remplacé automatiquement.
+\newcommand{\diagramme}[3]{%
+  \begin{figure}[H]\centering
+  \IfFileExists{images/#1.pdf}{%
+    \includegraphics[width=\linewidth,height=.68\textheight,keepaspectratio]{images/#1.pdf}%
+  }{\IfFileExists{images/#1.png}{%
+    \includegraphics[width=\linewidth,height=.68\textheight,keepaspectratio]{images/#1.png}%
+  }{%
+    \fbox{\begin{minipage}[c][7cm][c]{.92\linewidth}
+      \centering\color{bleusombre}\textbf{Emplacement réservé au diagramme}\par
+      \medskip #2\par\medskip
+      \small\normalfont Source Mermaid :\par\texttt{\detokenize{#1.mmd}}\par
+      \medskip Image à déposer dans \texttt{images/}
+    \end{minipage}}%
+  }}
+  \caption{#2}\label{#3}
+  \end{figure}%
+}

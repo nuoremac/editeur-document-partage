@@ -1,0 +1,39 @@
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#ffffff', 'primaryColor': '#ffffff', 'primaryTextColor': '#000000', 'primaryBorderColor': '#000000', 'lineColor': '#000000', 'secondaryColor': '#ffffff', 'tertiaryColor': '#ffffff', 'clusterBkg': '#ffffff', 'clusterBorder': '#000000'}}}%%
+flowchart TB
+    BROWSER["Navigateur web<br/>React + Vite"]
+
+    subgraph AWS["Compte AWS — une région"]
+        subgraph EC2["Amazon EC2"]
+            NGINX["Nginx<br/>sert le frontend et relaie HTTP / WS"]
+            API["API Node.js<br/>TypeScript + Express"]
+            WS["Serveur WebSocket Yjs personnalisé"]
+            WORKER["Worker PDF Node.js"]
+        end
+
+        RDS[("Amazon RDS<br/>PostgreSQL")]
+        SQS[["Amazon SQS<br/>Travaux PDF"]]
+        S3[("Amazon S3<br/>Versions et PDF")]
+        SES["Amazon SES<br/>Courriels"]
+        CW["Amazon CloudWatch<br/>Journaux et métriques"]
+        ROLE["Rôle IAM EC2<br/>moindre privilège"]
+    end
+
+    BROWSER <--> NGINX
+    NGINX --> API
+    NGINX <--> WS
+    API <--> RDS
+    API --> SQS
+    API --> SES
+    WORKER -->|"consomme les travaux"| SQS
+    WORKER <--> RDS
+    WORKER --> S3
+    API -->|"URL temporaire après réservation"| BROWSER
+    BROWSER -->|"téléchargement autorisé"| S3
+    API -. journaux .-> CW
+    WS -. journaux .-> CW
+    WORKER -. journaux .-> CW
+    ROLE -. "attaché à" .-> EC2
+    ROLE -. "droits limités" .-> SQS
+    ROLE -. "droits limités" .-> S3
+    ROLE -. "droits limités" .-> SES
+    ROLE -. "droits limités" .-> CW

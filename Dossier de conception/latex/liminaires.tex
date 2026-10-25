@@ -1,0 +1,48 @@
+\chapitresansnumero{Résumé}
+La publication collective d'un journal étudiant associe rédaction simultanée et diffusion à un nombre limité de lecteurs. Ce rapport présente la conception d'une application web destinée aux rédacteurs, aux visiteurs et aux responsables de l'association. Il formalise les exigences et décrit les mécanismes envisagés pour préserver les modifications acceptées, limiter les téléchargements et contrôler le crédit quotidien d'écriture. La solution proposée sépare l'édition collaborative, la réservation des exemplaires et la génération des PDF conservés dans S3. La modélisation relie les cas d'utilisation aux classes, aux interactions et aux composants de déploiement. Un plan de validation décrit les vérifications prévues pour les six contraintes du projet.
+
+\medskip\noindent\textbf{Mots-clés :} édition collaborative, cloud computing, concurrence, cohérence, quota, AWS, UML.
+
+\chapitresansnumero{Abstract}
+\begin{otherlanguage}{english}
+Publishing a student journal combines concurrent writing with distribution to a limited number of readers. This report presents the design of a web application for writers, visitors and association administrators. It specifies requirements and describes the mechanisms proposed to preserve accepted edits, enforce download limits and control daily writing credit. The proposed solution separates collaborative editing, copy reservation and PDF generation, with files stored in S3. The models connect use cases to classes, interactions and deployment components. A traceability matrix defines the checks required for the six project constraints.
+
+\medskip\noindent\textbf{Keywords:} collaborative editing, cloud computing, concurrency, consistency, quota, AWS, UML.
+\end{otherlanguage}
+
+\chapitresansnumero{Sigles et abréviations}
+\begin{description}[labelwidth=2cm,leftmargin=2.4cm]
+\item[API] Application Programming Interface.
+\item[AWS] Amazon Web Services.
+\item[CRDT] Conflict-free Replicated Data Type.
+\item[EC2] Elastic Compute Cloud.
+\item[HTTP] Hypertext Transfer Protocol.
+\item[IAM] Identity and Access Management.
+\item[PDF] Portable Document Format.
+\item[RDS] Relational Database Service.
+\item[S3] Simple Storage Service.
+\item[SES] Simple Email Service.
+\item[SQS] Simple Queue Service.
+\item[UML] Unified Modeling Language.
+\item[UUID] Universally Unique Identifier.
+\item[WS] WebSocket.
+\end{description}
+
+\chapitresansnumero{Glossaire}
+\begin{description}
+\item[AWS] Plateforme de services d'informatique en nuage retenue pour déployer, stocker, exécuter et superviser les composants de l'application.
+\item[Cloud computing] Mode de fourniture de ressources informatiques à la demande par l'intermédiaire d'un réseau, avec une capacité adaptable et une facturation liée à l'usage.
+\item[Cohérence] Propriété selon laquelle les données respectent les invariants du système, notamment les limites de téléchargement, le crédit d'écriture et l'association d'un PDF à une révision complète.
+\item[Concurrence] Situation dans laquelle plusieurs opérations s'exécutent pendant des intervalles qui se chevauchent et peuvent accéder aux mêmes données.
+\item[Convergence] Propriété selon laquelle les participants finissent par observer le même document après intégration des opérations acceptées.
+\item[Crédit journalier] Nombre de caractères qu'un rédacteur peut encore insérer pendant une période quotidienne.
+\item[Édition collaborative] Modification d'un même document par plusieurs rédacteurs, avec propagation des opérations, présence des participants et convergence vers un contenu commun.
+\item[Idempotence] Propriété permettant de répéter une demande sans reproduire son effet métier.
+\item[Modification acceptée] Opération validée et enregistrée durablement par le serveur. Une saisie locale en attente n'est pas encore acceptée.
+\item[Quota] Limite numérique associée à une ressource ou à une opération. Dans ce projet, le terme désigne notamment le nombre d'exemplaires téléchargeables et le crédit quotidien d'écriture.
+\item[Réservation] Autorisation logique consommant un exemplaire du quota du lien, selon l'hypothèse de comptage du présent dossier.
+\item[Révision] État identifié et cohérent du contenu d'un document.
+\item[UML] Langage graphique normalisé utilisé pour représenter les besoins, la structure, les interactions, les états, les composants et le déploiement du système.
+\item[Version] Révision conservée pour consultation ou restauration.
+\item[Présence] Information temporaire indiquant qu'un rédacteur participe à une session d'édition.
+\end{description}

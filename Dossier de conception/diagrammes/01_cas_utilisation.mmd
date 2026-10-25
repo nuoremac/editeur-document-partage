@@ -1,0 +1,44 @@
+flowchart LR
+    Redacteur["👤 Rédacteur"]
+    Visiteur["👤 Visiteur"]
+    Admin["👤 Administrateur"]
+    Horloge["⏱ Horloge système"]
+    Email["✉ Service d'e-mail"]
+
+    subgraph Systeme["Éditeur collaboratif de documents"]
+        UC1(["S'identifier"])
+        UC2(["Créer un document"])
+        UC3(["Partager un document"])
+        UC4(["Modifier collaborativement"])
+        UC5(["Voir présences et curseurs"])
+        UC6(["Consulter les versions"])
+        UC7(["Restaurer une version"])
+        UC8(["Créer un lien limité"])
+        UC9(["Consulter son crédit"])
+        UC10(["Demander un téléchargement"])
+        UC11(["Patienter pour le PDF"])
+        UC12(["Récupérer le PDF"])
+        UC13(["Constater l'épuisement"])
+        UC14(["Consulter l'état de l'application"])
+        UC15(["Réinitialiser la période de crédit"])
+        UC16(["Notifier le dernier exemplaire"])
+    end
+
+    Redacteur --> UC1
+    Redacteur --> UC2
+    Redacteur --> UC3
+    Redacteur --> UC4
+    Redacteur --> UC5
+    Redacteur --> UC6
+    Redacteur --> UC7
+    Redacteur --> UC8
+    Redacteur --> UC9
+    Visiteur --> UC10
+    UC10 -. "étend" .-> UC11
+    UC10 -. "inclut si autorisé" .-> UC12
+    UC10 -. "étend" .-> UC13
+    Admin --> UC14
+    Horloge --> UC15
+    UC16 --> Email
+    UC10 -. "dernier exemplaire" .-> UC16
+

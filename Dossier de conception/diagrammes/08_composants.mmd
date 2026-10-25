@@ -1,0 +1,41 @@
+%%{init: {'theme': 'base', 'sequence': {'mirrorActors': false}, 'themeVariables': {'background': '#ffffff', 'primaryColor': '#ffffff', 'primaryTextColor': '#000000', 'primaryBorderColor': '#000000', 'lineColor': '#000000', 'secondaryColor': '#ffffff', 'tertiaryColor': '#ffffff', 'actorBkg': '#ffffff', 'actorBorder': '#000000', 'actorTextColor': '#000000', 'signalColor': '#000000', 'signalTextColor': '#000000', 'labelBoxBkgColor': '#ffffff', 'labelBoxBorderColor': '#000000', 'labelTextColor': '#000000', 'loopTextColor': '#000000', 'noteBkgColor': '#ffffff', 'noteBorderColor': '#000000', 'noteTextColor': '#000000', 'activationBkgColor': '#ffffff', 'activationBorderColor': '#000000', 'stateBkg': '#ffffff', 'stateBorder': '#000000', 'stateTextColor': '#000000', 'transitionColor': '#000000', 'transitionLabelColor': '#000000'}}}%%
+flowchart LR
+    subgraph Frontend["Composant Application web"]
+        ED["Éditeur"]
+        PUBUI["Publication"]
+        ADMUI["Administration"]
+    end
+
+    subgraph Backend["Composants backend"]
+        DOC["API Documents"]
+        COL["Collaboration"]
+        CREDIT["Crédits et abus"]
+        DL["Téléchargements"]
+        GEN["Génération PDF"]
+        NOTIF["Notifications"]
+        ADM["Vues d'administration"]
+    end
+
+    IDOC(("Interface Documents"))
+    IWS(("Interface Collaboration"))
+    IPUB(("Interface Publication"))
+    IADM(("Interface Administration"))
+    IJOB(("Interface Travaux PDF"))
+    INOTIF(("Interface Notifications"))
+
+    ED --> IDOC --> DOC
+    ED --> IWS --> COL
+    PUBUI --> IPUB --> DL
+    ADMUI --> IADM --> ADM
+    COL --> CREDIT
+    DL --> IJOB --> GEN
+    DL --> INOTIF --> NOTIF
+    DOC --> STORE[("Stockage métier")]
+    COL --> STORE
+    CREDIT --> STORE
+    DL --> STORE
+    GEN --> STORE
+    ADM --> STORE
+    GEN --> OBJECTS[("S3 versions et PDF")]
+    NOTIF --> EMAIL["Service e-mail"]
+

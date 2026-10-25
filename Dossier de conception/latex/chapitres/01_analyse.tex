@@ -1,0 +1,321 @@
+\chapter{Démarche méthodologique et analyse des besoins}
+
+\section{Contexte, objectifs et périmètre}
+\subsection{Objectifs}
+
+Le système doit permettre la rédaction collective, le versionnement et la diffusion contrôlée de documents, tout en restant observable et déployable dans une seule région AWS. La conception poursuit quatre objectifs prioritaires :
+
+
+\begin{itemize}
+\item garantir l'exactitude du quota de téléchargements.
+\item garantir la convergence des éditions concurrentes.
+\item isoler le pic de consultation du travail des rédacteurs.
+\item produire des preuves reproductibles de ces garanties.
+\end{itemize}
+
+\subsection{Périmètre fonctionnel}
+
+Les fonctionnalités comprises dans le périmètre de l'application sont les suivantes :
+
+\begin{itemize}
+\item identification déclarative du rédacteur par son nom et son adresse e-mail
+\item création et partage de documents
+\item édition simultanée d'un document par plusieurs rédacteurs
+\item affichage de la présence et des curseurs des participants
+\item consultation et restauration des versions précédentes
+\item gestion du crédit journalier d'écriture
+\item détection des tentatives abusives et blocage temporaire
+\item création de liens limités à un nombre défini de téléchargements
+\item génération et téléchargement du document courant au format PDF
+\item notification du créateur lors du dernier téléchargement autorisé
+\item consultation de l'état de l'application par l'administrateur
+\end{itemize}
+
+\section{Démarche de développement}
+La réalisation de la solution suit les étapes suivantes :
+
+\begin{enumerate}
+\item concevoir la réservation atomique d'un téléchargement
+\item mettre en place l'édition concurrente et vérifier la convergence
+\item développer la gestion des documents, des rédacteurs et des versions
+\item intégrer les crédits, les blocages et l'administration
+\item ajouter la génération PDF, la file d'attente et la notification
+\item déployer la solution dans une région AWS
+\item réaliser les tests système et les tests de charge
+\item documenter le déploiement et la suppression des ressources
+\end{enumerate}
+
+
+\section{Acteurs}
+
+Le système comporte trois acteurs primaires et un acteur secondaire.
+
+\begin{itemize}
+\item \textbf{Visiteur, acteur primaire :} demande anonymement le téléchargement d'un PDF.
+\item \textbf{Rédacteur, acteur primaire :} crée, partage et modifie les documents.
+\item \textbf{Administrateur, acteur primaire :} consulte l'état de l'application.
+\item \textbf{Service mail, acteur secondaire :} transmet la notification du dernier exemplaire.
+\end{itemize}
+
+\section{Spécification des exigences}
+\subsection{Exigences fonctionnelles}
+
+\begingroup\small\setlength{\tabcolsep}{3pt}\renewcommand{\arraystretch}{1.25}
+\begin{longtable}{|P{0.14\textwidth}|P{0.79\textwidth}|}
+\caption{Exigences fonctionnelles}\\
+\hline
+ID & Exigence \\ \hline
+\endfirsthead
+\hline
+ID & Exigence \\ \hline
+\endhead
+\endfoot
+
+EF-01 & Le système doit identifier un rédacteur à partir d'un nom et d'une adresse e-mail. \\ \hline
+
+EF-02 & Un rédacteur doit pouvoir créer un document textuel. \\ \hline
+
+EF-03 & Le propriétaire doit pouvoir donner accès à son document à d'autres rédacteurs. \\ \hline
+
+EF-04 & Plusieurs rédacteurs doivent pouvoir modifier simultanément un même document. \\ \hline
+
+EF-05 & Chaque rédacteur connecté doit voir la présence et la position d'édition des autres rédacteurs. \\ \hline
+
+EF-06 & Un rédacteur doit pouvoir consulter les versions précédentes d'un document. \\ \hline
+
+EF-07 & Un rédacteur autorisé doit pouvoir restaurer une version précédente. \\ \hline
+
+EF-08 & Un rédacteur doit pouvoir créer un lien en choisissant sa limite de téléchargements. \\ \hline
+
+EF-09 & Un visiteur doit pouvoir demander anonymement le PDF à partir d'un lien. \\ \hline
+
+EF-10 & Le système doit indiquer si le PDF est disponible, en préparation ou épuisé. \\ \hline
+
+EF-11 & Le système doit limiter chaque rédacteur à 10 000 caractères insérés par période quotidienne. \\ \hline
+
+EF-12 & Le système doit détecter les tentatives répétées de contournement et appliquer un blocage temporaire. \\ \hline
+
+EF-13 & L'administrateur doit pouvoir consulter les documents ouverts, liens actifs, quotas restants et personnes bloquées. \\ \hline
+
+EF-14 & Le système doit demander l'envoi d'un e-mail au créateur lors de l'attribution du dernier exemplaire. \\ \hline
+
+EF-15 & Un rédacteur doit pouvoir consulter le crédit utilisé et le crédit restant pour la période quotidienne en cours. \\ \hline
+
+\end{longtable}\endgroup
+
+\subsection{Exigences non fonctionnelles}
+
+\begingroup\small\setlength{\tabcolsep}{3pt}\renewcommand{\arraystretch}{1.25}
+\begin{longtable}{|P{0.22\textwidth}|P{0.36\textwidth}|P{0.35\textwidth}|}
+\caption{Exigences non fonctionnelles}\\
+\hline
+ID & Exigence vérifiable & Catégorie \\ \hline
+\endfirsthead
+\hline
+ID & Exigence vérifiable & Catégorie \\ \hline
+\endhead
+\endfoot
+
+ENF-01 & Le système doit garantir que, pour un lien de limite N, le nombre d'autorisations valides délivrées reste inférieur ou égal à N, quelle que soit la concurrence. & Fiabilité \\ \hline
+
+ENF-02 & Le système doit garantir que tous les participants obtiennent le même contenu après la réception du même ensemble d'opérations acceptées. & Fiabilité \\ \hline
+
+ENF-03 & Le système doit générer chaque PDF à partir d'une révision identifiée et complète du document. & Cohérence \\ \hline
+
+ENF-04 & Le système doit limiter à 10 000 la somme des caractères acceptés pour un rédacteur pendant une période quotidienne. & Fiabilité \\ \hline
+
+ENF-05 & Le système doit fournir à chaque visiteur du scénario de charge une réponse explicite parmi les états prêt, attente ou épuisé. & Performance \\ \hline
+
+ENF-06 & Le système doit empêcher toute nouvelle demande de déclencher une génération de PDF après l'épuisement du quota. & Efficience \\ \hline
+
+ENF-07 & Le système doit fonctionner sans qu'aucune clé d'accès AWS apparaisse dans le code ou dans le dépôt. & Sécurité \\ \hline
+
+ENF-08 & Le système doit attribuer à chaque composant uniquement les permissions nécessaires à ses responsabilités. & Sécurité \\ \hline
+
+ENF-09 & Le système doit déployer toutes les ressources régionales dans une seule région AWS. & Organisation \\ \hline
+
+ENF-10 & Le système doit fournir des procédures reproductibles de déploiement, de test et de suppression. & Maintenabilité \\ \hline
+
+\end{longtable}\endgroup
+
+\section{Règles de gestion et hypothèses}
+\begingroup\small\setlength{\tabcolsep}{3pt}\renewcommand{\arraystretch}{1.25}
+\begin{longtable}{|P{.12\textwidth}|P{.43\textwidth}|P{.38\textwidth}|}
+\caption{Règles de gestion et hypothèses}\\
+\hline
+ID & Règle retenue & Justification \\ \hline
+\endfirsthead
+\hline
+ID & Règle retenue & Justification \\ \hline
+\endhead
+\endfoot
+
+RG-01 & Un exemplaire est consommé lorsque le serveur crée avec succès une réservation unique. & La fin réelle d'un transfert HTTP n'est pas toujours observable. \\ \hline
+
+RG-02 & Une réservation réussie n'est jamais rendue automatiquement au quota. & Évite qu'un abandon ou une répétition permette de dépasser N autorisations. \\ \hline
+
+RG-03 & Une modification est acceptée après validation du blocage et du crédit, attribution d'un identifiant idempotent et persistance de l'opération. & Donne un sens vérifiable à « modification acceptée ». \\ \hline
+
+RG-04 & Seuls les caractères insérés sont débités. Les suppressions ne restituent pas de crédit. & Empêche les cycles insertion-suppression de créer du crédit. \\ \hline
+
+RG-05 & Une restauration crée une nouvelle version courante au lieu d'effacer l'historique. & Préserve la traçabilité. \\ \hline
+
+RG-06 & La demande de PDF capture un identifiant de révision après la réservation. & Le fichier peut être relié à un état complet et vérifiable. \\ \hline
+
+RG-07 & La période quotidienne est déterminée par l'horloge du serveur dans le fuseau Africa/Douala. & Évite la manipulation de l'horloge client. \\ \hline
+
+RG-08 & Le passage au dernier exemplaire et la création de l'événement d'e-mail appartiennent à la même transaction logique. & Conserve un événement métier unique et récupérable après panne. \\ \hline
+
+RG-09 & L'identité nom/e-mail est déclarative et ne prouve pas l'identité civile. & Limite explicitement fixée par le sujet. \\ \hline
+
+\end{longtable}\endgroup
+
+\section{Modèle des cas d'utilisation}
+\diagramme{CasdUtilisation.drawio}{Cas d'utilisation de l'éditeur collaboratif}{fig:1}
+
+\newcommand{\fichecas}[8]{%
+\subsection{#1 --- #2}
+\begingroup\small\setlength{\tabcolsep}{4pt}\renewcommand{\arraystretch}{1.2}
+\begin{longtable}{|P{0.24\textwidth}|P{0.71\textwidth}|}
+\caption{Fiche du cas #1}\\
+\hline
+\textbf{Rubrique} & \textbf{Spécification} \\ \hline
+\endfirsthead
+\hline
+\textbf{Rubrique} & \textbf{Spécification} \\ \hline
+\endhead
+\endfoot
+Objectif & #3 \\ \hline
+Acteur principal & #4 \\ \hline
+Préconditions & #5 \\ \hline
+Scénario nominal & #6 \\ \hline
+Scénarios alternatifs & #7 \\ \hline
+Postconditions & #8 \\ \hline
+\end{longtable}\endgroup
+}
+
+\fichecas
+{UC-01}{S'authentifier}
+{Ouvrir une session de rédaction.}
+{Rédacteur.}
+{L'application est accessible.}
+{1. Ouvrir l'application. 2. Saisir le nom et l'adresse e-mail. 3. Valider. 4. Le système contrôle le format et ouvre la session.}
+{Données invalides : demander leur correction. Service indisponible : signaler l'échec sans ouvrir de session.}
+{La session est ouverte avec l'identité déclarée.}
+
+\fichecas
+{UC-02}{Créer un document}
+{Créer un document textuel.}
+{Rédacteur.}
+{Session ouverte.}
+{1. Choisir la création. 2. Saisir le titre. 3. Valider. 4. Le système crée le document et sa révision initiale.}
+{Titre invalide : demander une correction. Échec de stockage : ne pas annoncer la création.}
+{Le document possède un identifiant et le rédacteur en est propriétaire.}
+
+\fichecas
+{UC-03}{Partager un document}
+{Autoriser un autre rédacteur à accéder au document.}
+{Rédacteur propriétaire.}
+{Session ouverte et document accessible avec le rôle de propriétaire.}
+{1. Ouvrir le partage. 2. Saisir l'adresse e-mail du rédacteur. 3. Choisir son rôle. 4. Valider. 5. Le système enregistre l'autorisation.}
+{Adresse invalide : demander une correction. Autorisation existante : actualiser le rôle sans créer de doublon.}
+{Le rédacteur désigné possède l'autorisation enregistrée.}
+
+\fichecas
+{UC-04}{Modifier collaborativement}
+{Modifier un document avec plusieurs rédacteurs.}
+{Rédacteur autorisé.}
+{Session ouverte, autorisation valide, absence de blocage et crédit suffisant pour une insertion.}
+{1. Ouvrir le document. 2. Produire une opération d'édition. 3. Le système vérifie l'accès, le blocage et le crédit. 4. Il conserve l'opération. 5. Il la diffuse aux participants.}
+{Crédit insuffisant ou blocage : refuser l'opération. Opération déjà reçue : retourner le résultat précédent. Reconnexion : récupérer les opérations manquantes.}
+{L'opération acceptée est durable et intégrée par les participants.}
+
+\fichecas
+{UC-05}{Voir présences et curseurs}
+{Voir les rédacteurs présents et leur position d'édition.}
+{Rédacteur autorisé.}
+{Document ouvert et connexion collaborative active.}
+{1. Publier la présence et la position du curseur. 2. Recevoir celles des autres rédacteurs. 3. Actualiser leur affichage.}
+{Déconnexion brutale : retirer la présence après expiration. Position absente : afficher uniquement la présence.}
+{Les présences et curseurs actifs sont visibles.}
+
+\fichecas
+{UC-06}{Consulter les versions}
+{Parcourir l'historique d'un document.}
+{Rédacteur autorisé.}
+{Session ouverte et accès au document.}
+{1. Ouvrir l'historique. 2. Charger la liste des versions. 3. Sélectionner une version. 4. Afficher son contenu et ses métadonnées.}
+{Historique vide : l'indiquer. Version indisponible : signaler l'erreur sans modifier le document.}
+{La version sélectionnée est consultée sans changement de l'état courant.}
+
+\fichecas
+{UC-07}{Restaurer une version}
+{Rétablir le contenu d'une version antérieure.}
+{Rédacteur autorisé.}
+{Version sélectionnée, autorisation valide et crédit suffisant pour les réinsertions.}
+{1. Choisir la restauration. 2. Confirmer. 3. Le système vérifie la révision courante et le crédit. 4. Il crée une nouvelle révision. 5. Il diffuse la restauration.}
+{Édition concurrente : recalculer la restauration. Crédit insuffisant ou autorisation retirée : refuser l'opération.}
+{Une nouvelle révision courante est créée et l'historique est conservé.}
+
+\fichecas
+{UC-08}{Créer un lien limité}
+{Créer un lien public avec une limite de téléchargements.}
+{Rédacteur.}
+{Session ouverte, document accessible et limite strictement positive.}
+{1. Choisir le document. 2. Saisir la limite. 3. Valider. 4. Le système vérifie les droits. 5. Il crée le lien et retourne son URL.}
+{Limite invalide ou droits insuffisants : refuser la création et afficher la raison.}
+{Un lien actif possède une limite initiale et un solde égal à cette limite.}
+
+\fichecas
+{UC-09}{Consulter son crédit}
+{Connaître le crédit utilisé et restant.}
+{Rédacteur.}
+{Session ouverte.}
+{1. Ouvrir l'espace de crédit. 2. Le système charge la période courante. 3. Il calcule le solde. 4. Il affiche la limite, l'utilisation et le crédit restant.}
+{Nouvelle période : initialiser le compteur serveur. Données indisponibles : afficher une erreur et non un solde nul.}
+{Le crédit courant est affiché sans modifier le compteur.}
+
+\fichecas
+{UC-10}{Demander un téléchargement}
+{Obtenir le PDF associé à un lien public.}
+{Visiteur.}
+{Le visiteur possède l'identifiant du lien.}
+{1. Ouvrir le lien. 2. Envoyer la demande. 3. Le système réserve atomiquement un exemplaire et capture la version. 4. Il retourne le PDF disponible ou un état d'attente.}
+{Lien épuisé : refuser la demande. PDF absent : lancer sa génération. Demande répétée : retrouver la réservation existante.}
+{Une réservation unique existe, ou le quota reste inchangé si la demande est refusée.}
+
+\fichecas
+{UC-11}{Notifier le dernier exemplaire}
+{Informer le créateur que le quota est épuisé.}
+{Service mail, acteur secondaire.}
+{La dernière réservation a ramené le solde à zéro et un événement durable existe.}
+{1. Mettre l'événement en file. 2. Le service mail le reçoit. 3. Il envoie le message au créateur. 4. Le système enregistre le résultat.}
+{Échec temporaire : programmer une nouvelle tentative. Événement déjà traité : ne pas envoyer un second message.}
+{La notification est marquée comme envoyée ou en attente de nouvelle tentative.}
+
+\fichecas
+{UC-12}{Consulter les documents ouverts}
+{Afficher les documents ayant une activité en cours.}
+{Administrateur.}
+{Accès au tableau de bord administratif.}
+{1. Ouvrir le tableau de bord. 2. Demander les documents ouverts. 3. Le système agrège l'activité et les connexions. 4. Il affiche la liste.}
+{Aucun document ouvert : afficher une liste vide. Source indisponible : signaler les données manquantes.}
+{La liste des documents ouverts est affichée sans modifier les données.}
+
+\fichecas
+{UC-13}{Consulter les personnes bloquées}
+{Afficher les rédacteurs actuellement bloqués.}
+{Administrateur.}
+{Accès au tableau de bord administratif.}
+{1. Ouvrir la vue des blocages. 2. Le système recherche les blocages actifs. 3. Il affiche le rédacteur, la cause et la date de fin.}
+{Aucun blocage : afficher une liste vide. Données indisponibles : signaler l'erreur.}
+{Les blocages actifs sont affichés sans être modifiés.}
+
+\fichecas
+{UC-14}{Consulter les liens actifs et le nombre de téléchargements restant}
+{Suivre les liens actifs et leur solde.}
+{Administrateur.}
+{Accès au tableau de bord administratif.}
+{1. Ouvrir la vue des liens. 2. Le système recherche les liens actifs. 3. Il affiche le document, la limite initiale, le solde et l'état.}
+{Aucun lien actif : afficher une liste vide. Données indisponibles : signaler l'erreur sans afficher de faux soldes.}
+{Les liens actifs et leurs soldes sont affichés sans modification.}

@@ -1,0 +1,37 @@
+%%{init: {'theme': 'base', 'sequence': {'mirrorActors': false}, 'themeVariables': {'background': '#ffffff', 'primaryColor': '#ffffff', 'primaryTextColor': '#000000', 'primaryBorderColor': '#000000', 'lineColor': '#000000', 'secondaryColor': '#ffffff', 'tertiaryColor': '#ffffff', 'actorBkg': '#ffffff', 'actorBorder': '#000000', 'actorTextColor': '#000000', 'signalColor': '#000000', 'signalTextColor': '#000000', 'labelBoxBkgColor': '#ffffff', 'labelBoxBorderColor': '#000000', 'labelTextColor': '#000000', 'loopTextColor': '#000000', 'noteBkgColor': '#ffffff', 'noteBorderColor': '#000000', 'noteTextColor': '#000000', 'activationBkgColor': '#ffffff', 'activationBorderColor': '#000000', 'stateBkg': '#ffffff', 'stateBorder': '#000000', 'stateTextColor': '#000000', 'transitionColor': '#000000', 'transitionLabelColor': '#000000'}}}%%
+sequenceDiagram
+    actor V as Visiteur
+    participant API as API de publication
+    participant DB as Stockage métier
+    participant Q as File PDF
+    participant G as Générateur PDF
+    participant S3 as Stockage S3
+    participant N as File de notifications
+
+    V->>API: Demander(linkId, requestId)
+    API->>DB: Transaction de réservation conditionnelle
+    alt lien actif avec solde positif
+        DB-->>API: Réservation + versionId + nouveau solde
+        opt nouveau solde égal à zéro
+            DB->>N: Événement LAST_COPY idempotent
+        end
+        API->>DB: Chercher PDF(versionId)
+        alt PDF déjà disponible
+            DB-->>API: Clé S3
+            API->>S3: Créer un accès temporaire
+            S3-->>API: URL temporaire
+            API-->>V: READY(URL)
+        else PDF absent
+            API->>Q: Enfiler(reservationId, versionId)
+            API-->>V: QUEUED(reservationId)
+            Q->>G: Traiter la version
+            G->>DB: Lire l'instantané immuable
+            DB-->>G: Contenu de versionId
+            G->>S3: Écrire PDF et empreinte
+            G->>DB: Marquer la réservation prête
+        end
+    else lien épuisé
+        DB-->>API: Condition refusée
+        API-->>V: EXHAUSTED
+    end
+

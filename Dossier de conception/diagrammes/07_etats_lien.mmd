@@ -1,0 +1,12 @@
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#ffffff', 'primaryColor': '#ffffff', 'primaryTextColor': '#000000', 'primaryBorderColor': '#000000', 'lineColor': '#000000', 'stateBkg': '#ffffff', 'stateBorder': '#000000', 'stateTextColor': '#000000', 'transitionColor': '#000000', 'transitionLabelColor': '#000000'}}}%%
+stateDiagram-v2
+    state "Actif" as ACTIF
+    state "Épuisé" as EPUISE
+    state "Expiré" as EXPIRE
+
+    [*] --> ACTIF : création du lien
+    ACTIF --> ACTIF : téléchargement accepté, quota restant
+    ACTIF --> EPUISE : dernier téléchargement accepté
+    ACTIF --> EXPIRE : expiration du lien
+    EPUISE --> EXPIRE : expiration du lien
+    EXPIRE --> [*]

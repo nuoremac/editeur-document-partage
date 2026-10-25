@@ -1,0 +1,29 @@
+%%{init: {'theme': 'base', 'sequence': {'mirrorActors': false}, 'themeVariables': {'background': '#ffffff', 'primaryColor': '#ffffff', 'primaryTextColor': '#000000', 'primaryBorderColor': '#000000', 'lineColor': '#000000', 'secondaryColor': '#ffffff', 'tertiaryColor': '#ffffff', 'actorBkg': '#ffffff', 'actorBorder': '#000000', 'actorTextColor': '#000000', 'signalColor': '#000000', 'signalTextColor': '#000000', 'labelBoxBkgColor': '#ffffff', 'labelBoxBorderColor': '#000000', 'labelTextColor': '#000000', 'loopTextColor': '#000000', 'noteBkgColor': '#ffffff', 'noteBorderColor': '#000000', 'noteTextColor': '#000000', 'activationBkgColor': '#ffffff', 'activationBorderColor': '#000000', 'stateBkg': '#ffffff', 'stateBorder': '#000000', 'stateTextColor': '#000000', 'transitionColor': '#000000', 'transitionLabelColor': '#000000'}}}%%
+sequenceDiagram
+    actor R as Rédacteur
+    participant S1 as Session 1
+    participant S2 as Session 2
+    participant C as Service collaboratif
+    participant DB as Stockage métier
+
+    Note over R,DB: L = limite ; U = caractères déjà utilisés ; n1 et n2 = tailles des demandes.
+    R->>S1: Saisir une modification de n1 caractères
+    R->>S2: Saisir une modification de n2 caractères
+
+    par les deux requêtes sont en cours simultanément
+        S1->>C: Envoyer la modification (op-1)
+        C->>DB: Débiter n1 si U + n1 <= L
+    and
+        S2->>C: Envoyer la modification (op-2)
+        C->>DB: Débiter n2 si U + n2 <= L
+    end
+
+    Note over DB: Les transactions mettent à jour U de façon atomique et sont sérialisées.
+    DB-->>C: Résultat de op-1 : accepté ou refusé
+    DB-->>C: Résultat de op-2 : accepté ou refusé
+    C-->>S1: Résultat de la modification op-1
+    C-->>S2: Résultat de la modification op-2
+    S1-->>R: Afficher le résultat de op-1
+    S2-->>R: Afficher le résultat de op-2
+    Note over C,DB: Après chaque débit accepté, le nouveau U doit rester inférieur ou égal à L.
+

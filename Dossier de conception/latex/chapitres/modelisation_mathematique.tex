@@ -1,0 +1,130 @@
+\section{Formalisation mathématique de la solution}
+\label{sec:formalisation}
+
+L'édition collaborative et la publication limitée font intervenir plusieurs actions concurrentes. Une description fonctionnelle seule ne suffit pas à déterminer si leurs effets restent corrects. Cette section formalise les états, les transitions et les propriétés à préserver. Les démonstrations portent sur le modèle proposé. La conformité de l'implémentation à ce modèle devra ensuite être vérifiée.
+
+\subsection{Hypothèses de cohérence}
+\subsubsection{Atomicité, cohérence et idempotence}
+Une opération est atomique lorsque ses effets métier deviennent visibles ensemble ou ne le deviennent pas. Réserver un exemplaire exige ainsi de mettre à jour le compteur et de créer la réservation dans une même transition. Une interruption entre ces deux écritures ne doit pas laisser un quota débité sans réservation récupérable.
+
+La cohérence désigne ici le respect des règles propres au système : un compteur ne devient jamais négatif, un crédit ne dépasse pas sa limite et une version de document est complète. L'idempotence traite un autre problème : une même demande retransmise doit retrouver son résultat précédent, sans créer une nouvelle consommation.
+
+\subsubsection{Ordre des opérations et concurrence}
+Deux demandes sont concurrentes lorsque leurs intervalles d'exécution se recouvrent. Pour les compteurs, le système doit se comporter comme si chaque modification atomique intervenait à un instant unique entre la réception de la demande et sa réponse. Cet instant constitue son point de linéarisation. La réservation du dernier exemplaire ne peut donc appartenir qu'à une seule demande.
+
+L'édition admet un modèle différent : les répliques peuvent momentanément diverger pendant la transmission, à condition que les opérations acceptées soient durables et que leur intégration conduise au même état final. Cette distinction permet de choisir une cohérence stricte pour les quotas et une convergence contrôlée pour le texte.
+
+\subsection{Ensembles et variables d'état}
+On note $U$ l'ensemble des rédacteurs, $D$ l'ensemble des documents et $L$ l'ensemble des liens. Chaque lien $\ell\in L$ référence un document $d(\ell)\in D$. L'ensemble $A\subseteq U\times D$ contient les autorisations d'édition. La condition $(u,d)\in A$ signifie que le rédacteur $u$ dispose d'un accès au document $d$.
+
+\begin{longtable}{|P{.22\textwidth}|P{.70\textwidth}|}
+\caption{Notations du modèle formel}\label{tab:notations}\\\hline
+\textbf{Symbole} & \textbf{Signification} \\\hline
+\endfirsthead
+\hline\textbf{Symbole} & \textbf{Signification} \\\hline\endhead
+\endfoot
+$N_\ell$ & Limite initiale d'exemplaires du lien $\ell$, strictement positive. \\\hline
+$R_\ell(t)$ & Nombre d'exemplaires encore réservables à l'instant $t$. \\\hline
+$S_\ell(t)$ & Ensemble des réservations distinctes validées pour $\ell$. \\\hline
+$B_{u,j}(t)$ & Caractères débités pour $u$ durant la période quotidienne $j$. \\\hline
+$c(o)$ & Coût en caractères insérés de l'opération $o$. \\\hline
+$O_d(t)$ & Ensemble des opérations acceptées pour le document $d$. \\\hline
+$V_d(k)$ & Contenu cohérent du document $d$ à la révision identifiée $k$. \\\hline
+$Q(t)$ & Nombre de travaux PDF en attente, hors travaux en cours. \\\hline
+\end{longtable}
+
+\subsection{Quota de téléchargements}
+\subsubsection{Invariant de conservation}
+Le modèle compte des autorisations logiques de téléchargement. Il impose :
+\begin{equation}
+R_\ell(t)+|S_\ell(t)|=N_\ell,\qquad 0\leq R_\ell(t)\leq N_\ell.
+\label{eq:quota}
+\end{equation}
+Une demande possède une clé d'idempotence $q$. Si $q\in S_\ell$, le résultat déjà enregistré est retourné. Si $q\notin S_\ell$ et $R_\ell>0$, la transition atomique est :
+\begin{equation}
+(R_\ell,S_\ell)\longmapsto (R_\ell-1,S_\ell\cup\{q\}).
+\end{equation}
+Si le solde vaut zéro, la demande est refusée sans changement d'état.
+
+\subsubsection{Justification de la borne}
+À l'initialisation, $R_\ell=N_\ell$ et $S_\ell=\varnothing$. L'équation~\eqref{eq:quota} est satisfaite. Une réservation nouvelle diminue le premier terme d'une unité et augmente le second d'une unité. Sa garde $R_\ell>0$ interdit un solde négatif. Une répétition ou un refus ne modifie aucun terme. Par induction sur les transitions validées, $|S_\ell|\leq N_\ell$ demeure vrai, même si les demandes arrivent simultanément.
+
+La sûreté « jamais plus de $N_\ell$ » ne suffit pas à établir que les $N_\ell$ exemplaires pourront tous être obtenus. Sous l'hypothèse d'un service disponible et d'au moins $N_\ell$ demandes distinctes recevables, la progression des traitements doit permettre d'atteindre $|S_\ell|=N_\ell$. Les échecs de génération sont repris avec la même réservation.
+
+\subsubsection{Portée du comptage}
+Une autorisation n'est pas la preuve qu'un transfert a été reçu entièrement. Une adresse S3 temporaire peut aussi être réutilisée pendant sa validité. La preuve précédente concerne les réservations, pas un nombre exact de transferts HTTP. Si la règle finale exige un transfert unique, un point de livraison contrôlé devra consommer un jeton atomiquement avant l'envoi. Le traitement des coupures et reprises devra alors être défini. Cette frontière constitue une hypothèse explicite de la spécification, et non une propriété acquise du stockage.
+
+\subsection{Crédit journalier d'écriture}
+Pour chaque rédacteur $u$ et chaque période $j$, la limite est $C=10\,000$. Le débit est défini par :
+\begin{equation}
+B_{u,j}=\sum_{o\in O_{u,j}}c(o),\qquad 0\leq B_{u,j}\leq C,
+\label{eq:credit}
+\end{equation}
+où $O_{u,j}$ est l'ensemble des opérations distinctes acceptées pour ce rédacteur et cette période. Le serveur ne valide une insertion que si $B_{u,j}+c(o)\leq C$. Le débit, l'enregistrement de l'opération et son identifiant idempotent doivent appartenir à la même transaction logique. Ainsi, deux appareils utilisent un compteur commun.
+
+Le coût est le nombre de points de code Unicode insérés, mesuré côté serveur. Une suppression ne rembourse aucun crédit. Un remplacement coûte les nouveaux caractères insérés. Pour éviter une voie de contournement, une restauration est traduite en opérations contrôlées et ses réinsertions sont débitées. Cette règle doit être annoncée à l'utilisateur. Un glyphe visuel composé peut contenir plusieurs points de code : cette convention de comptage doit rester identique dans le client et le serveur.
+
+Le même raisonnement inductif que pour le quota établit la borne~\eqref{eq:credit} si le coût est calculé correctement. L'identifiant du jour est calculé selon l'heure serveur dans le fuseau \texttt{Africa/Douala}. Un nouveau jour correspond à un nouvel enregistrement de crédit. Aucun balayage global des utilisateurs à minuit n'est nécessaire.
+
+\subsection{Convergence et conservation des éditions}
+\subsubsection{Modèle abstrait de fusion}
+Dans un modèle CRDT à états, l'état logique appartient à un ensemble ordonné $(\mathcal{S},\preceq)$ muni d'une fusion $\sqcup$. Les propriétés utiles sont :
+\begin{align}
+x\sqcup y &= y\sqcup x &&\text{(commutativité)},\\
+(x\sqcup y)\sqcup z &= x\sqcup(y\sqcup z) &&\text{(associativité)},\\
+x\sqcup x &= x &&\text{(idempotence)}.
+\end{align}
+Les métadonnées de l'état logique peuvent croître même lorsque le texte visible est raccourci par une suppression. La fusion s'applique donc à l'état interne, pas à une concaténation de chaînes. Les protocoles à mises à jour doivent respecter les règles de dépendance et de livraison du CRDT choisi. Ces équations sont un modèle d'explication et ne démontrent pas, seules, la correction de la bibliothèque utilisée.
+
+\subsubsection{Propriété de convergence attendue}
+Si deux participants $a$ et $b$ ont intégré le même ensemble d'opérations valides et leurs dépendances, ils doivent obtenir le même texte :
+\begin{equation}
+O_d^{(a)}=O_d^{(b)}\ \Longrightarrow\
+\operatorname{texte}(S_d^{(a)})=\operatorname{texte}(S_d^{(b)}).
+\end{equation}
+La convergence finale suppose que la diffusion reprend après une interruption et que les opérations manquantes sont accessibles. Elle ne garantit pas qu'un participant isolé du réseau voie immédiatement le dernier état.
+
+\subsubsection{Durabilité et sens d'une modification conservée}
+Pour toute opération confirmée $o$, le système impose :
+\begin{equation}
+\operatorname{confirmation}(o)\Longrightarrow
+\operatorname{persistance}(o)\land\operatorname{rejouable}(o).
+\end{equation}
+Une opération conservée n'implique pas que tous ses caractères restent visibles éternellement : un autre rédacteur peut les supprimer légitimement. Les tests distingueront donc les insertions seules, dont les marqueurs doivent tous apparaître, des scénarios avec suppression ou restauration, dont le résultat doit respecter la sémantique du protocole. Une opération refusée pour crédit insuffisant ne doit pas être diffusée comme une opération acceptée.
+
+\subsection{Révision cohérente et production du PDF}
+Pour une demande de téléchargement $r$, on note $t_e$ l'entrée dans le service et $t_c$ l'acceptation de sa capture de révision. Le système choisit un point $\tau_r\in[t_e,t_c]$ et associe à la demande la révision $k_r$ courante à cet instant :
+\begin{equation}
+P_r=\operatorname{RenduPDF}(V_{d(r)}(k_r)).
+\label{eq:pdf}
+\end{equation}
+L'identifiant $k_r$ reste fixe pendant toute la génération. Un instantané ancien ne suffit pas : il faut reconstruire la révision capturée en intégrant les opérations acceptées jusqu'à celle-ci. Si une correction est confirmée avant l'arrivée d'une nouvelle demande, la révision choisie pour cette demande doit en tenir compte.
+
+Une réalisation possible lit le numéro courant $k$, puis crée la réservation avec une condition vérifiant que ce numéro n'a pas changé. En cas d'échec, elle recommence sans débit. Une autre réalisation capture la révision dans le service autoritatif du document. Le choix dépend de la plateforme et de la contention. Dans les deux cas, la génération s'appuie sur une version immuable.
+
+La relation~\eqref{eq:pdf} signifie que le PDF reflète un état entier du document. Deux visiteurs peuvent recevoir deux révisions différentes si une modification est acceptée entre leurs captures. Une demande mise en attente conserve sa révision capturée. Ce point fixe l'interprétation du moment d'utilisation du lien.
+
+\subsection{Modèle de charge et attente}
+Le scénario fournit $15\,000$ visiteurs, dont $80\,\%$ pendant la première minute. Le débit moyen sur cette minute est donc :
+\begin{equation}
+\bar\lambda_v=\frac{0{,}8\times15\,000}{60}=200\ \text{demandes par seconde}.
+\end{equation}
+Cette moyenne ne borne pas les rafales instantanées. Le générateur de charge devra tester une distribution étalée et une arrivée concentrée, pendant que $300$ rédacteurs travaillent. Si chacun produit en moyenne $f$ messages par seconde, le trafic entrant collaboratif vaut $300f$. Le nombre de diffusions dépend aussi du nombre de participants par document.
+
+Pour la file PDF, un modèle discret simplifié est :
+\begin{equation}
+Q_{n+1}=\max(0,Q_n+A_n-M_n),
+\end{equation}
+où $A_n$ est le nombre de travaux admis pendant l'intervalle et $M_n$ la capacité de traitement disponible. Avec $k$ travailleurs et un temps moyen de génération $s$, le débit de service est approximativement $k/s$. Cette approximation doit être mesurée pour les documents réellement utilisés.
+
+Pour un lien limité à $500$ exemplaires, au plus $500$ réservations distinctes alimentent la chaîne PDF. Les demandes rejetées ne doivent pas engendrer de travail de rendu. Le partage d'un PDF entre réservations visant la même révision peut réduire le nombre de générations. Les reprises peuvent en revanche augmenter le nombre de tentatives d'exécution.
+
+\subsection{Épuisement et notification}
+Le passage de $R_\ell=1$ à $R_\ell=0$ produit un événement logique unique $e_\ell$. Une contrainte d'unicité sur son identifiant évite de créer deux événements pour le même lien. L'événement est enregistré avec le compteur, puis transmis par un relais reprenable. Une panne entre l'enregistrement et l'envoi à la file ne doit pas perdre cette notification.
+
+L'unicité de l'événement ne prouve pas l'unicité absolue d'un e-mail reçu : si le fournisseur accepte l'envoi puis que le processus tombe avant l'enregistrement du résultat, une reprise peut créer un doublon. La conception distingue donc l'événement métier unique, les tentatives d'envoi et la garantie réellement offerte par le fournisseur.
+
+Après épuisement, les visiteurs sans réservation obtiennent l'état épuisé. Les visiteurs ayant déjà réservé conservent leur droit et leurs travaux continuent jusqu'à une issue explicite. Seuls les travaux dépourvus d'autorisation et les attentes devenues inutiles doivent cesser.
+
+\subsection{Lien avec les modèles UML}
+Les classes \texttt{LienTelechargement}, \texttt{Reservation} et \texttt{CreditJournalier} portent les variables des équations~\eqref{eq:quota} et~\eqref{eq:credit}. Les transitions atomiques apparaissent dans les séquences de réservation et d'édition. Les classes de version et de PDF matérialisent la relation~\eqref{eq:pdf}. Les diagrammes rendent visibles les responsabilités. Les invariants précisent les propriétés que leurs échanges doivent préserver.

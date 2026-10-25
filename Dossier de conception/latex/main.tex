@@ -1,0 +1,42 @@
+\documentclass[12pt,a4paper,oneside]{report}
+\input{preambule}
+\input{informations}
+\begin{document}
+\hypersetup{pageanchor=false}
+\input{couverture}
+\pagenumbering{roman}
+\hypersetup{pageanchor=true}
+\input{liminaires}
+\tableofcontents
+\clearpage
+\phantomsection\addcontentsline{toc}{chapter}{Liste des figures}
+\listoffigures
+\clearpage
+\phantomsection\addcontentsline{toc}{chapter}{Liste des tableaux}
+\listoftables
+\clearpage
+\pagenumbering{arabic}
+\input{chapitres/introduction}
+\input{chapitres/01_concepts_etat_art}
+\input{chapitres/01_analyse}
+\input{chapitres/02_conception}
+\input{chapitres/modelisation_mathematique}
+\input{chapitres/03_exploitation}
+\input{chapitres/04_validation}
+\input{chapitres/conclusion}
+\begin{thebibliography}{99}
+\addcontentsline{toc}{chapter}{Bibliographie}
+\bibitem{lamport1978} Leslie Lamport, \textit{Time, Clocks, and the Ordering of Events in a Distributed System}, Communications of the ACM, volume 21, numéro 7, pages 558--565, 1978, \url{https://lamport.azurewebsites.net/pubs/time-clocks.pdf}.
+\bibitem{ellis1989} Clarence A. Ellis et Simon J. Gibbs, \textit{Concurrency Control in Groupware Systems}, actes de la conférence ACM SIGMOD, pages 399--407, 1989, \url{https://doi.org/10.1145/67544.66963}.
+\bibitem{preguica2009} Nuno Preguiça, Joan Manuel Marquès, Marc Shapiro et Mihai Letia, \textit{A Commutative Replicated Data Type for Cooperative Editing}, actes de la conférence ICDCS, pages 395--403, 2009, \url{https://www.lip6.fr/Marc.Shapiro/papers/2009/icdcs09-treedoc.pdf}.
+\bibitem{shapiro2011} Marc Shapiro, Nuno Preguiça, Carlos Baquero et Marek Zawirski, \textit{Conflict-Free Replicated Data Types}, actes du symposium SSS, pages 386--400, 2011, \url{https://perso.lip6.fr/Marc.Shapiro/papers/2011/CRDTs_SSS-2011.pdf}.
+\bibitem{yjs} Yjs, \textit{Documentation officielle}, \url{https://docs.yjs.dev/}, consultée en octobre 2026.
+\bibitem{postgresupdate} PostgreSQL Global Development Group, \textit{UPDATE}, documentation officielle, \url{https://www.postgresql.org/docs/current/sql-update.html}, consultée en octobre 2026.
+\bibitem{postgreslocks} PostgreSQL Global Development Group, \textit{Explicit Locking}, documentation officielle, \url{https://www.postgresql.org/docs/current/explicit-locking.html}, consultée en octobre 2026.
+\bibitem{awsec2iam} Amazon Web Services, \textit{Identity and access management for Amazon EC2}, documentation officielle, \url{https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/security-iam.html}, consultée en octobre 2026.
+\bibitem{awspresigned} Amazon Web Services, \textit{Download and upload objects with presigned URLs}, documentation officielle, \url{https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html}, consultée en octobre 2026.
+\bibitem{googledocs} Google, \textit{Aide-mémoire Google Docs}, documentation officielle Google Workspace, \url{https://support.google.com/a/users/answer/9299931}, consultée en octobre 2026.
+\bibitem{wordonline} Microsoft, \textit{Document collaboration and co-authoring}, documentation officielle Microsoft Support, \url{https://support.microsoft.com/en-us/sharepoint/get-started-with-sharepoint/document-collaboration-and-co-authoring}, consultée en octobre 2026.
+\bibitem{etherpad} Etherpad Foundation, \textit{Etherpad Documentation}, \url{https://docs.etherpad.org/}, consultée en octobre 2026.
+\end{thebibliography}
+\end{document}

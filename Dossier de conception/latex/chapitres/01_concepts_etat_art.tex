@@ -1,0 +1,141 @@
+\chapter{Concepts généraux et état de l'art}
+
+Ce chapitre définit les notions utiles et compare les principales solutions d'édition collaborative.
+
+\section{Concepts généraux}
+
+\subsection{Édition collaborative}
+
+L'édition collaborative permet à plusieurs utilisateurs de modifier un même document. Elle doit diffuser et conserver les opérations malgré les délais réseau et les déconnexions temporaires.
+
+\subsection{Concurrence et ordre des opérations}
+
+Deux opérations sont concurrentes lorsqu'aucune ne précède causalement l'autre \cite{lamport1978}. Une révision identifie un état logique. Une version est un état durable et restaurable.
+
+\subsection{Cohérence, convergence et atomicité}
+
+La cohérence garantit les invariants métier. La convergence conduit les répliques possédant les mêmes opérations au même contenu. L'atomicité applique une opération entièrement ou pas du tout. L'idempotence empêche qu'une répétition consomme deux fois un quota.
+
+\subsection{Version, instantané et restauration}
+
+Un instantané est l'état immuable d'une révision. Il sert à la restauration et à la génération déterministe du PDF. Restaurer crée un nouvel état courant sans effacer l'historique.
+
+\subsection{Cloud computing}
+
+Le cloud fournit calcul, stockage et communication à la demande. Le projet utilise une instance EC2 pour l'application, PostgreSQL pour les données métier, une file pour absorber les pics et S3 pour les versions et les PDF.
+
+\section{État de l'art des mécanismes collaboratifs}
+
+\subsection{Verrouillage et sauvegarde centralisée}
+
+Le verrouillage exclusif simplifie la cohérence mais bloque les autres rédacteurs. Le dernier écrivain gagnant est simple, mais peut écraser une contribution concurrente.
+
+\subsection{Transformation opérationnelle}
+
+La transformation opérationnelle adapte une opération distante au contexte local \cite{ellis1989}. Elle est réactive, mais ses règles de transformation sont complexes à vérifier.
+
+\subsection{Types de données répliqués sans conflit}
+
+Les CRDT fusionnent les mises à jour concurrentes et font converger les répliques \cite{preguica2009,shapiro2011}. Yjs applique ce principe à l'édition collaborative \cite{yjs}. Les compteurs globaux exigent néanmoins des opérations atomiques.
+
+\subsection{Comparaison des approches}
+
+\begin{table}[H]
+  \centering
+  \caption{Comparaison des approches de gestion de la concurrence}
+  \label{tab:comparaison-concurrence}
+  \small
+  \begin{tabular}{|P{2.6cm}|P{3.2cm}|P{3.2cm}|P{3.2cm}|}
+    \hline
+    \textbf{Approche} & \textbf{Principe} & \textbf{Atouts} & \textbf{Limites} \\
+    \hline
+    Verrouillage & Un seul acteur modifie la ressource protégée & Cohérence simple à raisonner & Attente et faible fluidité collaborative \\
+    \hline
+    Dernier écrivain gagnant & L'état le plus récent remplace les précédents & Mise en œuvre simple & Risque de perte d'une contribution concurrente \\
+    \hline
+    Transformation opérationnelle & Les opérations sont transformées selon leur contexte & Bonne interactivité et historique d'opérations & Algorithmes de transformation complexes à vérifier \\
+    \hline
+    CRDT & Les opérations ou états sont fusionnés selon des règles convergentes & Travail concurrent et tolérance aux délais réseau & Métadonnées supplémentaires et sémantique à définir précisément \\
+    \hline
+  \end{tabular}
+\end{table}
+
+\section{Étude comparative des solutions existantes}
+
+Trois solutions représentatives sont comparées aux contraintes du projet.
+
+\begin{figure}[H]
+  \centering
+  \begin{minipage}[c]{0.29\textwidth}
+    \centering
+    \includegraphics[width=2.8cm,height=2.7cm,keepaspectratio]{images/GoogleDocs.jpeg}
+
+    \small Google Docs
+  \end{minipage}
+  \hfill
+  \begin{minipage}[c]{0.29\textwidth}
+    \centering
+    \includegraphics[width=3.2cm,height=2.7cm,keepaspectratio]{images/MicrosoftWordOnine.png}
+
+    \small Microsoft Word Online
+  \end{minipage}
+  \hfill
+  \begin{minipage}[c]{0.34\textwidth}
+    \centering
+    \includegraphics[width=4.8cm,height=2.7cm,keepaspectratio]{images/Etherpad.png}
+
+    \small Etherpad
+  \end{minipage}
+  \caption{Solutions collaboratives étudiées}
+  \label{fig:solutions-existantes}
+\end{figure}
+
+\subsection{Google Docs}
+
+Google Docs fournit coédition, partage, historique, restauration et export PDF \cite{googledocs}. Il ne documente pas la combinaison quota exact, crédit journalier et notification du dernier exemplaire.
+
+\subsection{Microsoft Word Online}
+
+Microsoft Word Online assure la coédition avec OneDrive ou SharePoint \cite{wordonline}. Son modèle ne couvre pas directement la publication anonyme limitée par un quota atomique.
+
+\subsection{Etherpad}
+
+Etherpad est libre, auto-hébergeable et extensible par plugins \cite{etherpad}. Les quotas, crédits, PDF cohérents et notifications exigent des composants supplémentaires.
+
+\subsection{Synthèse comparative}
+
+\begin{table}[H]
+  \centering
+  \caption{Positionnement des solutions existantes par rapport au projet}
+  \label{tab:solutions-existantes}
+  \small
+  \begin{tabular}{|P{2.7cm}|P{4.6cm}|P{5.8cm}|}
+    \hline
+    \textbf{Solution} & \textbf{Fonctions pertinentes} & \textbf{Écart avec le besoin étudié} \\
+    \hline
+    Google Docs & Coédition, partage, historique, restauration et export PDF & Absence documentée des règles combinant quota exact, crédit journalier et notification du dernier exemplaire \\
+    \hline
+    Microsoft Word Online & Coédition, versions et intégration à un stockage partagé & Dépendances de format et de stockage, sans publication anonyme limitée correspondant directement au projet \\
+    \hline
+    Etherpad & Édition temps réel, logiciel libre, auto-hébergement et plugins & Composants métier de quota, de crédit et de production du PDF à développer \\
+    \hline
+    Solution proposée & Collaboration convergente, version immuable, quota atomique, crédit et génération asynchrone & Périmètre éditorial volontairement plus réduit que celui d'une suite bureautique complète \\
+    \hline
+  \end{tabular}
+\end{table}
+
+La solution vise les contraintes de concurrence, de publication limitée et de charge, pas la richesse d'une suite bureautique.
+
+\section{État de l'art des mécanismes cloud}
+
+\subsection{Mise à jour conditionnelle des quotas}
+
+Une lecture suivie d'une écriture peut dépasser un quota concurrent. PostgreSQL permet de modifier uniquement la ligne qui respecte la condition attendue et de verrouiller les écritures concurrentes jusqu'à la fin de la transaction \cite{postgresupdate,postgreslocks}.
+
+\subsection{Traitement asynchrone et stockage immuable}
+
+Une file découple la génération du PDF de la requête et absorbe les pics. Chaque travail référence une révision immuable, puis stocke le résultat dans le stockage objet.
+
+\section{Positionnement de la solution}
+
+La solution utilise un CRDT pour le texte, des mises à jour atomiques pour les compteurs, des versions immuables et une génération PDF asynchrone et idempotente.

@@ -1,0 +1,12 @@
+{
+  "name": "journal-collaboratif",
+  "private": true,
+  "engines": { "node": ">=22", "npm": ">=10" },
+  "workspaces": ["apps/api", "apps/web"],
+  "scripts": {
+    "dev": "npm run dev --workspace @journal/api",
+    "dev:web": "npm run dev --workspace @journal/web",
+    "build": "npm run build --workspace @journal/api && npm run build --workspace @journal/web",
+    "test": "npm run test --workspace @journal/api"
+  }
+}

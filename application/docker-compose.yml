@@ -1,0 +1,65 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: journal
+      POSTGRES_USER: journal
+      POSTGRES_PASSWORD: journal
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U journal -d journal"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: postgres://journal:journal@db:5432/journal
+      PORT: 3000
+      API_BASE_URL: ${API_BASE_URL:-http://localhost:3000}
+      WEB_ORIGIN: http://localhost:5173
+      PUBLIC_BASE_URL: http://localhost:5173
+      PDF_STORAGE_DIR: /app/data/pdfs
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:-}
+      AWS_REGION: ${AWS_REGION:-eu-west-3}
+      S3_BUCKET: ${S3_BUCKET:-}
+      SQS_PDF_QUEUE_URL: ${SQS_PDF_QUEUE_URL:-}
+      SES_FROM_EMAIL: ${SES_FROM_EMAIL:-}
+    ports:
+      - "3000:3000"
+    volumes:
+      - pdf_data:/app/data/pdfs
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["sh", "-c", "npm run migrate && npm run start"]
+
+  pdf-worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: postgres://journal:journal@db:5432/journal
+      PDF_STORAGE_DIR: /app/data/pdfs
+      AWS_REGION: ${AWS_REGION:-eu-west-3}
+      S3_BUCKET: ${S3_BUCKET:-}
+      SQS_PDF_QUEUE_URL: ${SQS_PDF_QUEUE_URL:-}
+      SES_FROM_EMAIL: ${SES_FROM_EMAIL:-}
+    volumes:
+      - pdf_data:/app/data/pdfs
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["npm", "run", "worker"]
+
+volumes:
+  postgres_data:
+  pdf_data:
