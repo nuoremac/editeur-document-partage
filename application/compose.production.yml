@@ -50,7 +50,7 @@ services:
       PDF_STORAGE_DIR: /app/data/pdfs
       ADMIN_EMAILS: ${ADMIN_EMAILS:?Set ADMIN_EMAILS in .env.production}
       ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:?Set ADMIN_BOOTSTRAP_PASSWORD in .env.production}
-      AWS_REGION: ${AWS_REGION:-eu-west-3}
+      AWS_REGION: ${AWS_REGION:-eu-north-1}
       S3_BUCKET: ${S3_BUCKET:?Set S3_BUCKET in .env.production}
       SQS_PDF_QUEUE_URL: ${SQS_PDF_QUEUE_URL:-}
       SES_FROM_EMAIL: ${SES_FROM_EMAIL:-}

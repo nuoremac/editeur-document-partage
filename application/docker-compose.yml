@@ -43,7 +43,7 @@ services:
       PDF_STORAGE_DIR: /app/data/pdfs
       ADMIN_EMAILS: ${ADMIN_EMAILS:-}
       ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:-}
-      AWS_REGION: ${AWS_REGION:-eu-west-3}
+      AWS_REGION: ${AWS_REGION:-eu-north-1}
       S3_BUCKET: ${S3_BUCKET:-}
       SQS_PDF_QUEUE_URL: ${SQS_PDF_QUEUE_URL:-}
       SES_FROM_EMAIL: ${SES_FROM_EMAIL:-}
@@ -66,7 +66,7 @@ services:
     environment:
       DATABASE_URL: postgres://journal:journal@db:5432/journal
       PDF_STORAGE_DIR: /app/data/pdfs
-      AWS_REGION: ${AWS_REGION:-eu-west-3}
+      AWS_REGION: ${AWS_REGION:-eu-north-1}
       S3_BUCKET: ${S3_BUCKET:-}
       SQS_PDF_QUEUE_URL: ${SQS_PDF_QUEUE_URL:-}
       SES_FROM_EMAIL: ${SES_FROM_EMAIL:-}

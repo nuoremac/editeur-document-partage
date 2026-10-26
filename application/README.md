@@ -45,7 +45,7 @@ Créez les instances dans le même VPC. Seule l’instance Edge reçoit les conn
 | Edge | TCP 80 et 443 depuis Internet ; SSH uniquement depuis votre IP `/32` ou Session Manager |
 | API | TCP 3000 depuis le groupe Edge uniquement ; administration limitée |
 | Worker | aucune entrée publique ; administration limitée |
-| Données | TCP 5432 depuis les groupes API, Worker et Sauvegarde ; TCP 6379 depuis API et Worker ; administration limitée |
+| Données | TCP 5432 depuis les groupes API, Worker et Sauvegarde ; TCP 6379 depuis API uniquement ; administration limitée |
 | Sauvegarde | aucune entrée publique ; administration limitée |
 
 Ne rendez jamais PostgreSQL, Redis ou le port 3000 accessibles depuis Internet. Utilisez des volumes EBS chiffrés, activez IMDSv2 et activez MFA pour les identités humaines. Dans S3, bloquez l’accès public et activez le chiffrement. Utilisez une file SQS dédiée au PDF, avec une file DLQ si possible.
