@@ -18,6 +18,8 @@ const s3 = new S3Client({ region: process.env.AWS_REGION });
 const sqs = new SQSClient({ region: process.env.AWS_REGION });
 const scrypt = promisify(crypto.scrypt);
 const SESSION_COOKIE = 'journal_session';
+const SESSION_COOKIE_SECURE = process.env.SESSION_COOKIE_SECURE === 'true'
+  || (process.env.SESSION_COOKIE_SECURE !== 'false' && process.env.NODE_ENV === 'production');
 const SESSION_DAYS = 14;
 const allowedWebOrigins = (process.env.WEB_ORIGINS ?? process.env.WEB_ORIGIN ?? 'http://localhost:5173')
   .split(',').map((origin) => origin.trim()).filter(Boolean);
@@ -78,7 +80,7 @@ async function createSession(personId: string, res: express.Response) {
   await pool.query('INSERT INTO sessions (id_hash, person_id, expires_at) VALUES ($1, $2, $3)', [
     crypto.createHash('sha256').update(token).digest('hex'), personId, expires,
   ]);
-  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  const secure = SESSION_COOKIE_SECURE ? '; Secure' : '';
   res.setHeader('Set-Cookie', `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Expires=${expires.toUTCString()}${secure}`);
 }
 
@@ -160,7 +162,8 @@ app.post('/api/auth/login', asyncRoute(async (req, res) => {
 app.post('/api/auth/logout', asyncRoute(async (req, res) => {
   const token = cookieValue(req, SESSION_COOKIE);
   if (token) await pool.query('DELETE FROM sessions WHERE id_hash = $1', [crypto.createHash('sha256').update(token).digest('hex')]);
-  res.setHeader('Set-Cookie', `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
+  const secure = SESSION_COOKIE_SECURE ? '; Secure' : '';
+  res.setHeader('Set-Cookie', `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`);
   res.status(204).end();
 }));
 
