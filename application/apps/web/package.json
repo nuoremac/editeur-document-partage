@@ -10,10 +10,12 @@
   "dependencies": {
     "@vitejs/plugin-react": "^4.7.0",
     "quill": "^2.0.3",
+    "quill-cursors": "^4.3.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "typescript": "^5.8.3",
     "vite": "^6.3.5",
+    "y-protocols": "^1.0.7",
     "y-quill": "^1.0.0",
     "yjs": "^13.6.33"
   },

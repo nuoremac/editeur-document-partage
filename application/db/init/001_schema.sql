@@ -20,6 +20,14 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at);
 
+CREATE TABLE IF NOT EXISTS abuse_attempts (
+  id bigserial PRIMARY KEY,
+  person_id uuid NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+  reason text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_abuse_attempts_person_time ON abuse_attempts(person_id, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS documents (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   title text NOT NULL CHECK (length(trim(title)) BETWEEN 1 AND 200),

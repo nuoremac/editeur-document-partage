@@ -2,7 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import * as Y from 'yjs';
 import Quill from 'quill';
 import { QuillBinding } from 'y-quill';
+import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate } from 'y-protocols/awareness';
+import QuillCursors from 'quill-cursors';
 import 'quill/dist/quill.snow.css';
+import 'quill-cursors/css';
+
+Quill.register('modules/cursors', QuillCursors);
 
 function bytesToBase64(bytes: Uint8Array) {
   let binary = '';
@@ -10,7 +15,7 @@ function bytesToBase64(bytes: Uint8Array) {
   return btoa(binary);
 }
 
-export function CollaborativeEditor({ documentId, initialRevision, onRevision, onCreditUpdate, onProblem }: { documentId: string; initialRevision: number; onRevision: (revision: number) => void; onCreditUpdate: () => void; onProblem: (message: string) => void }) {
+export function CollaborativeEditor({ documentId, initialRevision, userName, onRevision, onCreditUpdate, onProblem }: { documentId: string; initialRevision: number; userName: string; onRevision: (revision: number) => void; onCreditUpdate: () => void; onProblem: (message: string) => void }) {
   const [charCount, setCharCount] = useState(0);
   const [status, setStatus] = useState('Connexion au document…');
   const [participants, setParticipants] = useState<string[]>([]);
@@ -24,12 +29,15 @@ export function CollaborativeEditor({ documentId, initialRevision, onRevision, o
 
   useEffect(() => {
     const ydoc = new Y.Doc();
+    const awareness = new Awareness(ydoc);
+    const hue = Array.from(userName).reduce((value, char) => (value * 31 + char.charCodeAt(0)) >>> 0, 7) % 360;
+    awareness.setLocalStateField('user', { name: userName, color: `hsl(${hue} 68% 42%)`, colorLight: `hsl(${hue} 75% 90%)` });
     const ytext = ydoc.getText('content');
     const quill = new Quill(editorRef.current!, {
       theme: 'snow', readOnly: true, placeholder: 'Commencez à écrire ici…',
-      modules: { toolbar: [[{ header: [1, 2, false] }], ['bold', 'italic', 'underline'], [{ list: 'ordered' }, { list: 'bullet' }], ['blockquote', 'link']] },
+      modules: { cursors: { hideDelayMs: 60_000, hideSpeedMs: 0 }, toolbar: [[{ header: [1, 2, false] }], ['bold', 'italic', 'underline'], [{ list: 'ordered' }, { list: 'bullet' }], ['blockquote', 'link']] },
     });
-    const binding = new QuillBinding(ytext, quill);
+    const binding = new QuillBinding(ytext, quill, awareness);
     const updateCharacterCount = () => setCharCount(Array.from(ytext.toString()).length);
     ytext.observe(updateCharacterCount);
     const apiUrl = new URL(import.meta.env.VITE_API_URL ?? 'http://localhost:3000');
@@ -37,6 +45,10 @@ export function CollaborativeEditor({ documentId, initialRevision, onRevision, o
     apiUrl.pathname = `/ws/documents/${documentId}`;
     apiUrl.search = '';
     const socket = new WebSocket(apiUrl);
+    const sendAwareness = () => {
+      if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'awareness', update: bytesToBase64(encodeAwarenessUpdate(awareness, [ydoc.clientID])) }));
+    };
+    awareness.on('update', sendAwareness);
     let synchronized = false;
     let closed = false;
     let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
@@ -54,7 +66,7 @@ export function CollaborativeEditor({ documentId, initialRevision, onRevision, o
       if (flushTimer) clearTimeout(flushTimer);
       flushTimer = setTimeout(flushUpdate, 250);
     });
-    socket.onopen = () => setStatus('Connexion établie · synchronisation…');
+    socket.onopen = () => { setStatus('Connexion établie · synchronisation…'); sendAwareness(); };
     socket.onmessage = (event) => {
       try {
         const message = JSON.parse(String(event.data)) as { type: string; update?: string; users?: string[]; revision?: number; message?: string };
@@ -65,9 +77,10 @@ export function CollaborativeEditor({ documentId, initialRevision, onRevision, o
           Y.applyUpdate(ydoc, Uint8Array.from(atob(message.update), (char) => char.charCodeAt(0)), 'remote');
           if (message.revision) { setRevision(message.revision); callbacks.current.onRevision(message.revision); }
         } else if (message.type === 'presence') setParticipants(message.users ?? []);
+        else if (message.type === 'awareness' && message.update) applyAwarenessUpdate(awareness, Uint8Array.from(atob(message.update), (char) => char.charCodeAt(0)), 'remote');
         else if (message.type === 'accepted' && message.revision) {
           setRevision(message.revision); callbacks.current.onRevision(message.revision);
-          setStatus(`Enregistré · version ${message.revision}`); callbacks.current.onCreditUpdate();
+          setStatus(`Synchronisé · révision ${message.revision}`); callbacks.current.onCreditUpdate();
         } else if (message.type === 'error') {
           setStatus(message.message ?? 'Modification refusée. Rechargement du document…');
           callbacks.current.onProblem(message.message ?? 'Modification refusée.');
@@ -87,14 +100,14 @@ export function CollaborativeEditor({ documentId, initialRevision, onRevision, o
       if (reconnectTimer) clearTimeout(reconnectTimer);
       if (flushTimer) clearTimeout(flushTimer);
       flushUpdate();
-      ytext.unobserve(updateCharacterCount); binding.destroy(); socket.close(); quill.disable(); ydoc.destroy();
+      awareness.off('update', sendAwareness); ytext.unobserve(updateCharacterCount); binding.destroy(); socket.close(); quill.disable(); awareness.destroy(); ydoc.destroy();
       const toolbar = quill.getModule('toolbar') as { container?: HTMLElement } | undefined;
       toolbar?.container?.remove();
       editorRef.current?.replaceChildren();
       editorRef.current?.classList.remove('ql-container', 'ql-snow', 'ql-disabled');
     };
-  }, [documentId, reconnect]);
+  }, [documentId, reconnect, userName]);
 
-  return <div className="editor-card"><div ref={editorRef} aria-label="Éditeur collaboratif" />{!synced && <div className="editor-overlay">{status}</div>}<div className="editor-footer"><span>{charCount.toLocaleString('fr-FR')} caractères · version {revision}</span><span>{status}{participants.length > 0 ? ` · ${participants.length} rédacteur(s) connecté(s)` : ''}</span></div></div>;
+  return <div className="editor-card"><div ref={editorRef} aria-label="Éditeur collaboratif" />{!synced && <div className="editor-overlay">{status}</div>}<div className="editor-footer"><span>{charCount.toLocaleString('fr-FR')} caractères · révision {revision}</span><span title={participants.join(', ')}>{participants.length > 0 ? `Présents : ${participants.join(', ')}` : status}</span></div></div>;
 }
 

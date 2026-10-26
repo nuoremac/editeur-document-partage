@@ -1,0 +1,123 @@
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#ffffff', 'primaryTextColor': '#000000', 'primaryBorderColor': '#000000', 'lineColor': '#000000', 'secondaryColor': '#ffffff', 'tertiaryColor': '#ffffff', 'background': '#ffffff'}}}%%
+classDiagram
+    direction LR
+
+    class Redacteur {
+        +UUID id
+        +String nom
+        +String email
+        +DateTime creeLe
+        +consulterCredit()
+    }
+
+    class Document {
+        +UUID id
+        +String titre
+        +Long revisionCourante
+        +DateTime modifieLe
+        +creerVersion()
+        +restaurerVersion()
+    }
+
+    class AutorisationDocument {
+        +RoleDocument role
+        +DateTime accordeeLe
+    }
+
+    class OperationEdition {
+        +UUID operationId
+        +Long revision
+        +Binary miseAJourCRDT
+        +Integer caracteresInseresValides
+        +DateTime accepteeLe
+    }
+
+    class VersionDocument {
+        +UUID versionId
+        +Long revision
+        +String cleObjet
+        +String empreinte
+        +DateTime creeeLe
+    }
+
+    class CreditJournalier {
+        +Date periode
+        +Integer utilises
+        +Integer limite
+        +debiterAtomiquement(nombre)
+        +solde()
+    }
+
+    class LienTelechargement {
+        +UUID linkId
+        +Integer limiteInitiale
+        +Integer restant
+        +EtatLien etat
+        +DateTime creeLe
+        +reserverAtomiquement()
+        +epuiser()
+    }
+
+    class Reservation {
+        +UUID reservationId
+        +EtatReservation etat
+        +DateTime creeeLe
+        +marquerPrete()
+        +marquerEchec()
+    }
+
+    class PDF {
+        +UUID pdfId
+        +String cleS3
+        +String empreinte
+        +DateTime genereLe
+    }
+
+    class Blocage {
+        +UUID blocageId
+        +String raison
+        +DateTime debut
+        +DateTime fin
+        +estActif()
+    }
+
+    class Notification {
+        +UUID notificationId
+        +EtatNotification etat
+        +DateTime creeeLe
+        +marquerEnvoyee()
+    }
+
+    class EvenementOutbox {
+        +UUID evenementId
+        +String type
+        +DateTime creeLe
+        +DateTime publieLe
+        +publierIdempotemment()
+    }
+
+    Redacteur "1" --> "0..*" Document : possède
+    Redacteur "1" --> "0..*" AutorisationDocument : reçoit
+    Document "1" *-- "0..*" AutorisationDocument : contrôle
+    Document "1" *-- "0..*" OperationEdition : journalise
+    Redacteur "1" --> "0..*" OperationEdition : produit
+    Document "1" *-- "0..*" VersionDocument : versionne
+    VersionDocument "1" --> "0..*" OperationEdition : matérialise jusqu'à la révision
+    Redacteur "1" *-- "0..*" CreditJournalier : consomme
+    CreditJournalier "1" --> "0..*" OperationEdition : débite pour
+    Redacteur "1" --> "0..*" Blocage : subit
+    Document "1" --> "0..*" LienTelechargement : publie
+    Redacteur "1" --> "0..*" LienTelechargement : crée
+    LienTelechargement "1" *-- "0..*" Reservation : autorise
+    VersionDocument "1" --> "0..*" Reservation : version capturée
+    VersionDocument "1" --> "0..1" PDF : est rendue en
+    LienTelechargement "1" --> "0..1" Notification : déclenche si quota atteint zéro
+    Reservation "1" --> "0..1" EvenementOutbox : produit si dernier exemplaire
+    Notification "1" --> "1" EvenementOutbox : délivrée par
+
+    note for LienTelechargement "Invariant : 0 <= restant <= limiteInitiale. Chaque réservation acceptée décrémente restant une seule fois."
+    note for OperationEdition "caracteresInseresValides est calculé côté serveur. Débit du crédit et persistance de l'opération doivent être atomiques."
+    note for Reservation "L'administrateur et le visiteur restent des acteurs externes ; ils ne sont pas des classes métier persistées."
+
+    classDef noirBlanc fill:#ffffff,stroke:#000000,color:#000000
+    class Redacteur,Document,AutorisationDocument,OperationEdition,VersionDocument,CreditJournalier,LienTelechargement,Reservation,PDF,Blocage,Notification,EvenementOutbox noirBlanc

@@ -1,4 +1,4 @@
-import { FormEvent, lazy, Suspense, useEffect, useState } from 'react';
+import { FormEvent, Fragment, lazy, ReactNode, Suspense, useEffect, useState } from 'react';
 import { api, AdminOverview, Credit, Document, DocumentSummary, Link, Person, ServerNotification, Version } from './api';
 
 const CollaborativeEditor = lazy(() => import('./CollaborativeEditor').then((module) => ({ default: module.CollaborativeEditor })));
@@ -147,17 +147,16 @@ function Workspace() {
   if (window.location.pathname === '/admin') return person.role === 'ADMIN'
     ? <AdminDashboard person={person} onLogout={async () => { await api.logout(); localStorage.removeItem(PERSON_KEY); setPerson(null); }} />
     : <main className="entry-screen"><section className="entry-card"><h1>Accès réservé</h1><p className="muted">Ce compte ne dispose pas du rôle administrateur.</p><a href="/">Retour à mon espace</a></section></main>;
+  if (person.role === 'ADMIN') return <AdminDashboard person={person} onLogout={async () => { await api.logout(); localStorage.removeItem(PERSON_KEY); setPerson(null); }} />;
 
   return <div className="app-shell">
     <aside className="sidebar">
       <div className="brand"><img className="brand-mark small brand-image" src="/Feather.jpeg" alt="Logo Atelier" /><span>atelier<span className="brand-dot">.</span></span></div>
       <div className="workspace-label">ESPACE ÉDITORIAL</div>
       <button className={`nav-item ${!opened ? 'selected' : ''}`} onClick={() => setOpened(null)}><span>▦</span> Mes documents</button>
-      {person.role === 'ADMIN' && <a className="nav-item" href="/admin"><span>⚙</span> Administration</a>}
-      <div className="sidebar-bottom"><div className="avatar">{person.name.slice(0, 1).toUpperCase()}</div><div className="user-info"><strong>{person.name}</strong><span>Rédacteur</span></div><button className="quiet logout-button" type="button" title="Se déconnecter" aria-label="Se déconnecter" onClick={async () => { await api.logout(); localStorage.removeItem(PERSON_KEY); setPerson(null); setOpened(null); }}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 4h7v16h-7"/><path d="M3 12h11m-4-4 4 4-4 4"/></svg></button></div>
+      <div className="sidebar-bottom"><NotificationButton items={notifications.items} onRead={notifications.markRead} onReadAll={notifications.markAllRead} /><div className="avatar">{person.name.slice(0, 1).toUpperCase()}</div><div className="user-info"><strong>{person.name}</strong><span>Rédacteur</span></div><button className="quiet logout-button" type="button" title="Se déconnecter" aria-label="Se déconnecter" onClick={async () => { await api.logout(); localStorage.removeItem(PERSON_KEY); setPerson(null); setOpened(null); }}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 4h7v16h-7"/><path d="M3 12h11m-4-4 4 4-4 4"/></svg></button></div>
     </aside>
     <main className="main-area">
-      <header className="topbar"><div><span className="muted">Journal étudiant</span><span className="slash">/</span><strong>{opened?.title ?? 'Vue d’ensemble'}</strong></div><div className="topbar-actions"><NotificationButton items={notifications.items} onRead={notifications.markRead} onReadAll={notifications.markAllRead} /><div className="top-user">{person.name} <span className="avatar tiny">{person.name.slice(0, 1).toUpperCase()}</span></div></div></header>
       <div className={`content-area ${opened ? 'content-area-document' : ''}`}>
         {problem && <div className="alert error">{problem}<button className="quiet" onClick={() => setProblem('')}>×</button></div>}
         {notice && <div className="alert success">{notice}<button className="quiet" onClick={() => setNotice('')}>×</button></div>}
@@ -175,7 +174,7 @@ function Workspace() {
 
 function AuthPanel({ onSubmit, busy, problem }: { onSubmit: (event: FormEvent<HTMLFormElement>) => void; busy: boolean; problem: string }) {
   const [register, setRegister] = useState(false);
-  return <main className="entry-screen"><section className="entry-card">
+  return <main className="entry-screen auth-screen"><section className="entry-card">
     <img className="brand-mark brand-image" src="/Feather.jpeg" alt="Logo Atelier" /><p className="eyebrow">ATELIER ÉDITORIAL</p><h1>{register ? 'Créer votre compte.' : 'Bienvenue dans votre espace.'}</h1>
     <p className="muted">{register ? 'Créez un compte pour rédiger et partager vos documents.' : 'Connectez-vous pour retrouver vos documents.'}</p>
     <form className="stack" onSubmit={onSubmit}>
@@ -190,6 +189,22 @@ function AuthPanel({ onSubmit, busy, problem }: { onSubmit: (event: FormEvent<HT
   </section></main>;
 }
 
+function PaginatedList<T>({ items, renderItem, emptyMessage }: { items: T[]; renderItem: (item: T) => ReactNode; emptyMessage: string }) {
+  const pageSize = 8;
+  const [page, setPage] = useState(0);
+  const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
+  useEffect(() => { setPage(0); }, [items.length]);
+  const visible = items.slice(page * pageSize, (page + 1) * pageSize);
+  return <>
+    {items.length === 0 ? <p className="muted admin-empty">{emptyMessage}</p> : <div className="link-list">{visible.map((item, index) => <Fragment key={page * pageSize + index}>{renderItem(item)}</Fragment>)}</div>}
+    {pageCount > 1 && <div className="version-pagination" aria-label="Pagination de la liste">
+      <button type="button" aria-label="Éléments plus récents" disabled={page === 0} onClick={() => setPage((current) => Math.max(0, current - 1))}>&lt;</button>
+      <span>{page + 1} / {pageCount}</span>
+      <button type="button" aria-label="Éléments plus anciens" disabled={page >= pageCount - 1} onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))}>&gt;</button>
+    </div>}
+  </>;
+}
+
 function AdminDashboard({ person, onLogout }: { person: Person; onLogout: () => void }) {
   const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [error, setError] = useState('');
@@ -198,7 +213,11 @@ function AdminDashboard({ person, onLogout }: { person: Person; onLogout: () => 
   function announce(message: string) { setNotice(message); notifications.add('success', message); }
   function reportProblem(message: string) { setError(message); if (message) notifications.add('error', message); }
   async function refresh() { try { setOverview(await api.adminOverview()); } catch (e) { reportProblem((e as Error).message); } }
-  useEffect(() => { refresh(); }, []);
+  useEffect(() => {
+    void refresh();
+    const timer = window.setInterval(() => { void refresh(); }, 15_000);
+    return () => window.clearInterval(timer);
+  }, []);
   async function toggleBlock(user: AdminOverview['people'][number]) {
     try {
       if (user.blocked) await api.unblockPerson(user.id);
@@ -211,19 +230,28 @@ function AdminDashboard({ person, onLogout }: { person: Person; onLogout: () => 
       await refresh();
     } catch (e) { reportProblem((e as Error).message); }
   }
-  return <div className="app-shell"><aside className="sidebar"><div className="brand"><img className="brand-mark small brand-image" src="/Feather.jpeg" alt="Logo Atelier" /><span>atelier<span className="brand-dot">.</span></span></div><div className="workspace-label">ADMINISTRATION</div><a className="nav-item" href="/">← Espace rédacteur</a><div className="sidebar-bottom"><div className="avatar">{person.name[0].toUpperCase()}</div><div className="user-info"><strong>{person.name}</strong><span>Administrateur</span></div><button className="quiet logout-button" type="button" title="Se déconnecter" aria-label="Se déconnecter" onClick={onLogout}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 4h7v16h-7"/><path d="M3 12h11m-4-4 4 4-4 4"/></svg></button></div></aside>
-    <main className="main-area"><header className="topbar"><strong>Tableau de bord administrateur</strong><div className="topbar-actions"><NotificationButton items={notifications.items} onRead={notifications.markRead} onReadAll={notifications.markAllRead} /><a href="/">Retour à l’application</a></div></header><div className="content-area"><p className="eyebrow">SUPERVISION</p><h1>Vue d’ensemble</h1>{error && <p className="error">{error}</p>}{notice && <p className="success">{notice}</p>}
-      <div className="document-grid">{Object.entries({ Comptes: overview?.metrics.accounts, Documents: overview?.metrics.documents, 'Liens publiés': overview?.metrics.links, Téléchargements: overview?.metrics.reservations, 'PDF en attente': overview?.metrics.pending_pdfs, 'E-mails en attente': overview?.metrics.pending_notifications }).map(([label, value]) => <article className="document-card" key={label}><span className="eyebrow">{label.toUpperCase()}</span><h2>{value ?? '—'}</h2></article>)}</div>
-      <section className="links-section"><h2>Comptes récents</h2><div className="link-list">{overview?.people.map((user) => <div className="link-row" key={user.id}><div><strong>{user.name} {user.role === 'ADMIN' && '· Administrateur'}</strong><small>{user.email} · créé le {new Date(user.created_at).toLocaleDateString('fr-FR')} {user.blocked ? '· Suspendu' : ''}</small></div>{user.id !== person.id && <button className="secondary" onClick={() => toggleBlock(user)}>{user.blocked ? 'Débloquer' : 'Suspendre 24 h'}</button>}</div>)}</div></section>
-      <section className="links-section"><h2>Dernières demandes de PDF</h2><div className="link-list">{overview?.recentReservations.map((job) => <div className="link-row" key={job.id}><div><strong>{job.title}</strong><small>Version {job.revision} · {new Date(job.created_at).toLocaleString('fr-FR')}</small></div><span className="role-pill">{job.state}</span></div>)}</div></section>
+  return <div className="app-shell"><aside className="sidebar"><div className="brand"><img className="brand-mark small brand-image" src="/Feather.jpeg" alt="Logo Atelier" /><span>atelier<span className="brand-dot">.</span></span></div><div className="workspace-label">ADMINISTRATION</div><div className="sidebar-bottom"><NotificationButton items={notifications.items} onRead={notifications.markRead} onReadAll={notifications.markAllRead} /><div className="avatar">{person.name[0].toUpperCase()}</div><div className="user-info"><strong>{person.name}</strong><span>Administrateur</span></div><button className="quiet logout-button" type="button" title="Se déconnecter" aria-label="Se déconnecter" onClick={onLogout}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 4h7v16h-7"/><path d="M3 12h11m-4-4 4 4-4 4"/></svg></button></div></aside>
+    <main className="main-area"><div className="content-area"><p className="eyebrow">SUPERVISION</p><h1>Vue d’ensemble</h1>{error && <p className="error">{error}</p>}{notice && <p className="success">{notice}</p>}
+      <div className="document-grid">{Object.entries({ 'Documents ouverts': overview?.metrics.open_documents, 'Liens actifs': overview?.metrics.active_links, 'Personnes bloquées': overview?.metrics.blocked_people, Comptes: overview?.metrics.accounts, Téléchargements: overview?.metrics.reservations, 'PDF en attente': overview?.metrics.pending_pdfs }).map(([label, value]) => <article className="document-card" key={label}><span className="eyebrow">{label.toUpperCase()}</span><h2>{value ?? '—'}</h2></article>)}</div>
+      <section className="links-section"><h2>Documents ouverts</h2><PaginatedList items={overview?.openDocuments ?? []} emptyMessage="Aucun document n’est actuellement ouvert." renderItem={(doc) => <div className="link-row"><div><strong>{doc.title}</strong><small>Révision {doc.revision} · {doc.editors.length} rédacteur(s) : {doc.editors.join(', ')}</small></div></div>} /></section>
+      <section className="links-section"><h2>Liens actifs et téléchargements restants</h2><PaginatedList items={overview?.activeLinks ?? []} emptyMessage="Aucun lien actif." renderItem={(link) => <div className="link-row"><span className="link-indicator"/><div><strong>{link.title}</strong><small>{link.remaining} restant(s) sur {link.initial_limit} · créé le {new Date(link.created_at).toLocaleDateString('fr-FR')}</small></div><a className="secondary admin-link" href={`/share/${link.token}`} target="_blank" rel="noreferrer">Ouvrir</a></div>} /></section>
+      <section className="links-section"><h2>Personnes bloquées</h2><PaginatedList items={overview?.blockedPeople ?? []} emptyMessage="Aucune personne bloquée." renderItem={(user) => <div className="link-row"><div><strong>{user.name}</strong><small>{user.email} · {user.role === 'ADMIN' ? 'Administrateur' : 'Rédacteur'}</small></div><button className="secondary" onClick={() => toggleBlock(user)}>Débloquer</button></div>} /></section>
+      <section className="links-section"><h2>Gestion des comptes</h2><PaginatedList items={overview?.people ?? []} emptyMessage="Aucun compte." renderItem={(user) => <div className="link-row"><div><strong>{user.name} {user.role === 'ADMIN' && '· Administrateur'}</strong><small>{user.email} · créé le {new Date(user.created_at).toLocaleDateString('fr-FR')} {user.blocked ? '· Suspendu' : ''}</small></div>{user.id !== person.id && <button className="secondary" onClick={() => toggleBlock(user)}>{user.blocked ? 'Débloquer' : 'Suspendre 24 h'}</button>}</div>} /></section>
     </div></main></div>;
 }
 
 function DocumentView({ document, person, busy, onBack, onCreateLink, onNotice, onProblem, onRevision, onCreditUpdate, onRestored }: { document: Document; person: Person; busy: boolean; onBack: () => void; onCreateLink: (event: FormEvent<HTMLFormElement>) => void; onNotice: (message: string) => void; onProblem: (message: string) => void; onRevision: (revision: number) => void; onCreditUpdate: () => void; onRestored: (document: Document) => void }) {
+  const VERSIONS_PER_PAGE = 8;
   const [limit, setLimit] = useState('500');
   const [versions, setVersions] = useState<Version[]>([]);
+  const [versionPage, setVersionPage] = useState(0);
+  const [savingVersion, setSavingVersion] = useState(false);
   const [shareEmail, setShareEmail] = useState('');
-  useEffect(() => { api.versions(person, document.id).then((data) => setVersions(data.versions)).catch((e: Error) => onProblem(e.message)); }, [person.id, document.id, document.revision]);
+  async function refreshVersions() {
+    try { setVersions((await api.versions(person, document.id)).versions); }
+    catch (e) { onProblem((e as Error).message); }
+  }
+  useEffect(() => { void refreshVersions(); }, [person.id, document.id]);
   async function share(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     try { await api.share(person, document.id, shareEmail); setShareEmail(''); onNotice('Accès accordé au rédacteur.'); }
@@ -231,26 +259,36 @@ function DocumentView({ document, person, busy, onBack, onCreateLink, onNotice, 
   }
   async function restore(version: Version) {
     if (!window.confirm(`Restaurer la version ${version.revision} ? Le contenu actuel sera conservé dans l’historique.`)) return;
-    try { onRestored({ ...await api.restore(person, document.id, version.id), role: document.role }); }
+    try { onRestored({ ...await api.restore(person, document.id, version.id), role: document.role }); await refreshVersions(); }
     catch (e) { onProblem((e as Error).message); }
   }
   async function createSnapshot() {
+    setSavingVersion(true);
     try {
       const version = await api.createVersion(person, document.id);
-      setVersions((current) => [version, ...current.filter((item) => item.revision !== version.revision)]);
-      onNotice(`Point de restauration créé à la version ${version.revision}.`);
+      await refreshVersions();
+      const nextNumber = versions.filter((item) => item.revision !== version.revision).length + 1;
+      onNotice(`Version ${nextNumber} enregistrée.`);
     } catch (e) { onProblem((e as Error).message); }
+    finally { setSavingVersion(false); }
   }
+  const currentVersionSaved = versions.some((version) => version.revision === document.revision);
+  const pageCount = Math.max(1, Math.ceil(versions.length / VERSIONS_PER_PAGE));
+  const visibleVersions = versions.slice(versionPage * VERSIONS_PER_PAGE, (versionPage + 1) * VERSIONS_PER_PAGE);
   return <div className="document-layout">
     <aside className="document-aside" aria-label="Outils du document">
       <button className="back-link" onClick={onBack}>← Tous les documents</button>
       <section className="document-tool-section">
         <div className="document-tool-heading"><h2>Historique</h2><span>{versions.length}</span></div>
-        <button className="snapshot-button" onClick={createSnapshot}>＋ Créer un point de restauration</button>
-        <div className="version-list">{versions.map((version) => <article className={`version-item ${version.revision === document.revision ? 'current' : ''}`} key={version.id}>
-          <div><strong>Version {version.revision}{version.revision === document.revision ? ' · actuelle' : ''}</strong><small>{new Date(version.created_at).toLocaleString('fr-FR')}</small></div>
+        <div className="version-list">{visibleVersions.map((version, index) => <article className={`version-item ${version.revision === document.revision ? 'current' : ''}`} key={version.id}>
+          <div><strong>Version {versions.length - (versionPage * VERSIONS_PER_PAGE + index)}{version.revision === document.revision ? ' · actuelle' : ''}</strong><small>{new Date(version.created_at).toLocaleString('fr-FR')}</small></div>
           {document.role === 'OWNER' && <button className="restore-button" disabled={busy || version.revision === document.revision} onClick={() => restore(version)}>Restaurer</button>}
         </article>)}</div>
+        {versions.length > VERSIONS_PER_PAGE && <div className="version-pagination" aria-label="Pagination de l’historique">
+          <button type="button" aria-label="Versions plus récentes" disabled={versionPage === 0} onClick={() => setVersionPage((page) => Math.max(0, page - 1))}>&lt;</button>
+          <span>{versionPage + 1} / {pageCount}</span>
+          <button type="button" aria-label="Versions plus anciennes" disabled={versionPage >= pageCount - 1} onClick={() => setVersionPage((page) => Math.min(pageCount - 1, page + 1))}>&gt;</button>
+        </div>}
       </section>
       <section className="document-tool-section">
         <div className="document-tool-heading"><h2>Publication</h2></div>
@@ -264,8 +302,13 @@ function DocumentView({ document, person, busy, onBack, onCreateLink, onNotice, 
       </section>}
     </aside>
     <main className="document-editor-main">
-      <div className="editor-heading"><div><p className="eyebrow">DOCUMENT · VERSION {document.revision}</p><h1>{document.title}</h1><p className="muted">Les modifications sont synchronisées entre les rédacteurs connectés.</p></div></div>
-      <Suspense fallback={<div className="editor-card">Chargement de l’éditeur…</div>}><CollaborativeEditor documentId={document.id} initialRevision={document.revision} onRevision={onRevision} onCreditUpdate={onCreditUpdate} onProblem={onProblem} /></Suspense>
+      <div className="editor-heading"><div><p className="eyebrow">DOCUMENT · RÉVISION {document.revision}{!currentVersionSaved ? ' · MODIFICATIONS NON ENREGISTRÉES' : ''}</p><h1>{document.title}</h1></div></div>
+      <Suspense fallback={<div className="editor-card">Chargement de l’éditeur…</div>}><CollaborativeEditor documentId={document.id} initialRevision={document.revision} userName={person.name} onRevision={onRevision} onCreditUpdate={onCreditUpdate} onProblem={onProblem} /></Suspense>
+      <div className="version-save-bar">
+        <button className="primary version-save-button" onClick={createSnapshot} disabled={busy || savingVersion || currentVersionSaved}>
+          {savingVersion ? 'Enregistrement…' : currentVersionSaved ? 'Version enregistrée' : 'Enregistrer une version'}
+        </button>
+      </div>
     </main>
   </div>;
 }
@@ -274,7 +317,24 @@ function PublicDownload({ token }: { token: string }) {
   const [link, setLink] = useState<Link | null>(null);
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
-  useEffect(() => { api.publicLink(token).then(setLink).catch((error: Error) => setStatus(error.message)); }, [token]);
+  useEffect(() => {
+    let active = true;
+    api.publicLink(token).then((value) => { if (active) setLink(value); }).catch((error: Error) => { if (active) setStatus(error.message); });
+    const wsUrl = new URL(import.meta.env.VITE_API_URL ?? 'http://localhost:3000');
+    wsUrl.protocol = wsUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+    wsUrl.pathname = `/ws/public/links/${token}`; wsUrl.search = '';
+    const socket = new WebSocket(wsUrl);
+    socket.onmessage = (event) => {
+      try {
+        const message = JSON.parse(String(event.data)) as { type?: string };
+        if (message.type === 'link-exhausted') {
+          setLink((current) => current ? { ...current, state: 'EXHAUSTED', remaining: 0 } : current);
+          setStatus('Le quota de téléchargements de ce lien vient d’être épuisé.');
+        }
+      } catch { /* Ignore les trames invalides. */ }
+    };
+    return () => { active = false; socket.close(); };
+  }, [token]);
   async function download() {
     setBusy(true); setStatus('Votre demande est enregistrée. Préparation du PDF…');
     try {

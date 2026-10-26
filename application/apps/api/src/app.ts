@@ -9,8 +9,9 @@ import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { pool, inTransaction } from './db.js';
-import { broadcastDocumentUpdate, restoreCollaborativeText, updateCollaborativeText } from './collaboration.js';
+import { broadcastDocumentUpdate, getActiveCollaborativeDocuments, notifyLinkExhausted, restoreCollaborativeText, updateCollaborativeText } from './collaboration.js';
 import { HttpError } from './errors.js';
+import { recordCreditAbuse } from './abuse.js';
 
 const app = express();
 const s3 = new S3Client({ region: process.env.AWS_REGION });
@@ -18,12 +19,17 @@ const sqs = new SQSClient({ region: process.env.AWS_REGION });
 const scrypt = promisify(crypto.scrypt);
 const SESSION_COOKIE = 'journal_session';
 const SESSION_DAYS = 14;
+const allowedWebOrigins = (process.env.WEB_ORIGINS ?? process.env.WEB_ORIGIN ?? 'http://localhost:5173')
+  .split(',').map((origin) => origin.trim()).filter(Boolean);
 app.use(helmet());
-app.use(cors({ origin: process.env.WEB_ORIGIN ?? 'http://localhost:5173', credentials: true }));
+app.use(cors({
+  origin: (origin, callback) => callback(null, !origin || allowedWebOrigins.includes(origin)),
+  credentials: true,
+}));
 app.use(express.json({ limit: '1mb' }));
 app.use((req, _res, next) => {
   const origin = req.header('origin');
-  if (origin && origin !== (process.env.WEB_ORIGIN ?? 'http://localhost:5173')) {
+  if (origin && !allowedWebOrigins.includes(origin)) {
     next(new HttpError(403, 'Origine de requête non autorisée.', 'ORIGIN_FORBIDDEN'));
     return;
   }
@@ -214,7 +220,8 @@ app.put('/api/documents/:documentId/content', asyncRoute(async (req, res) => {
   await requireNotBlocked(personId);
   const input = contentSchema.parse(req.body);
   await requireMember(String(req.params.documentId), personId);
-  const saved = await inTransaction(async (client) => {
+  let saved: any;
+  try { saved = await inTransaction(async (client) => {
     const docResult = await client.query(
       'SELECT id, title, content, revision FROM documents WHERE id = $1 FOR UPDATE',
       [String(req.params.documentId)],
@@ -266,7 +273,13 @@ app.put('/api/documents/:documentId/content', asyncRoute(async (req, res) => {
       [result.id, result.revision, Buffer.from(collaborativeUpdate)],
     );
     return { ...result, insertedCharacters: inserted, credit: credit.rows[0] ?? { used_chars: 0, limit_chars: 10000 }, collaborativeUpdate };
-  });
+  }); } catch (error) {
+    if (error instanceof HttpError && error.code === 'CREDIT_EXHAUSTED') {
+      const abuse = await recordCreditAbuse(personId, error.message);
+      if (abuse.blocked) throw new HttpError(403, 'Compte temporairement bloqué après plusieurs tentatives de dépassement du crédit.', 'ACCOUNT_BLOCKED');
+    }
+    throw error;
+  }
   const { collaborativeUpdate, ...response } = saved;
   await broadcastDocumentUpdate(String(req.params.documentId), collaborativeUpdate, response.revision);
   res.json(response);
@@ -389,21 +402,37 @@ app.post('/api/documents/:documentId/versions/:versionId/restore', asyncRoute(as
 app.get('/api/admin/overview', asyncRoute(async (req, res) => {
   const user = await signedIn(req);
   requireAdmin(user);
-  const [counts, people, reservations] = await Promise.all([
+  const [counts, people, reservations, activeLinks, openDocuments] = await Promise.all([
     pool.query(`SELECT (SELECT count(*) FROM people)::int AS accounts,
                        (SELECT count(*) FROM documents)::int AS documents,
                        (SELECT count(*) FROM download_links)::int AS links,
+                       (SELECT count(*) FROM download_links WHERE state = 'ACTIVE' AND remaining > 0
+                         AND (expires_at IS NULL OR expires_at > now()))::int AS active_links,
                        (SELECT count(*) FROM reservations)::int AS reservations,
                        (SELECT count(*) FROM reservations WHERE state IN ('QUEUED','PROCESSING'))::int AS pending_pdfs,
                        (SELECT count(*) FROM last_copy_notifications WHERE state <> 'SENT')::int AS pending_notifications`),
     pool.query(`SELECT p.id, p.name, p.email, p.account_role AS role, p.created_at,
                        EXISTS (SELECT 1 FROM temporary_blocks b WHERE b.person_id = p.id AND b.starts_at <= now() AND b.ends_at > now()) AS blocked
-                  FROM people p ORDER BY p.created_at DESC LIMIT 100`),
+                  FROM people p ORDER BY p.created_at DESC`),
     pool.query(`SELECT r.id, r.state, r.document_revision::int AS revision, r.created_at, d.title
                   FROM reservations r JOIN download_links l ON l.id = r.link_id
                   JOIN documents d ON d.id = l.document_id ORDER BY r.created_at DESC LIMIT 20`),
+    pool.query(`SELECT l.id, l.token, d.title, l.remaining, l.initial_limit, l.created_at, l.expires_at
+                  FROM download_links l JOIN documents d ON d.id = l.document_id
+                 WHERE l.state = 'ACTIVE' AND l.remaining > 0
+                   AND (l.expires_at IS NULL OR l.expires_at > now())
+                 ORDER BY l.created_at DESC`),
+    getActiveCollaborativeDocuments(),
   ]);
-  res.json({ metrics: counts.rows[0], people: people.rows, recentReservations: reservations.rows });
+  const blockedPeople = people.rows.filter((person) => person.blocked);
+  res.json({
+    metrics: { ...counts.rows[0], open_documents: openDocuments.length, blocked_people: blockedPeople.length },
+    people: people.rows,
+    blockedPeople,
+    activeLinks: activeLinks.rows,
+    openDocuments,
+    recentReservations: reservations.rows,
+  });
 }));
 
 app.post('/api/admin/people/:personId/blocks', asyncRoute(async (req, res) => {
@@ -523,6 +552,7 @@ app.post('/api/public/links/:token/reservations', asyncRoute(async (req, res) =>
     }
     return { ...inserted.rows[0], remaining: link.rows[0].remaining, replayed: false };
   });
+  if (!reservation.replayed && Number(reservation.remaining) === 0) notifyLinkExhausted(String(req.params.token));
   if (!reservation.replayed && process.env.SQS_PDF_QUEUE_URL) {
     try {
       await sqs.send(new SendMessageCommand({

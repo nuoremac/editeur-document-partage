@@ -6,22 +6,16 @@ flowchart TB
     end
 
     FE["Application web statique"]
-    HTTP["API HTTP<br/>validation identité et droits"]
+    HTTP["API HTTP"]
     WS["Passerelle WebSocket"]
-
-    subgraph Services["Services applicatifs"]
-        DOC["Service documents et versions"]
-        COLLAB["Service collaboratif CRDT<br/>opérations, crédit et diffusion"]
-        PUB["Service de publication<br/>réservation atomique et état du lien"]
-        ADMIN["Service d'administration<br/>consultation en lecture"]
-        PDF["Générateur PDF"]
-        OUTBOX["Relais d'événements idempotent"]
-    end
-
-    DB[("Stockage métier<br/>documents, opérations, liens,<br/>réservations, crédits et outbox")]
-    PRESENCE[("Présence et curseurs<br/>état éphémère avec expiration")]
-    SNAP[("S3<br/>versions immuables et PDF")]
+    DOC["Service documents et versions"]
+    COLLAB["Service collaboratif CRDT"]
+    PUB["Service de publication"]
+    ADMIN["Service d'administration"]
+    DB[("Stockage métier")]
+    SNAP[("Instantanés et PDF dans S3")]
     QUEUE[["File de travaux PDF"]]
+    PDF["Générateur PDF"]
     MAILQ[["File de notifications"]]
     MAIL["Service d'e-mail"]
     OBS["Journaux, métriques et alarmes"]
@@ -29,38 +23,25 @@ flowchart TB
     R --> FE
     V --> FE
     A --> FE
-    FE <--> HTTP
-    FE <--> WS
-
+    FE --> HTTP
+    FE --> WS
     HTTP --> DOC
     HTTP --> PUB
     HTTP --> ADMIN
-    WS <--> COLLAB
-
-    DOC <--> DB
+    WS --> COLLAB
+    DOC --> DB
     DOC --> SNAP
-    COLLAB <--> DB
-    COLLAB <--> PRESENCE
-    PUB -->|"transaction conditionnelle : décrémenter quota, créer réservation et capturer versionId"| DB
-    PUB -->|"si PDF de versionId absent"| QUEUE
+    COLLAB --> DB
+    PUB --> DB
+    PUB --> QUEUE
+    PUB --> MAILQ
     QUEUE --> PDF
-    PDF -->|"lire la version immuable"| SNAP
-    PDF -->|"écrire PDF et empreinte"| SNAP
-    PDF -->|"mettre à jour l'état de génération"| DB
-    PUB -->|"retour : prêt, en attente ou épuisé"| HTTP
-    HTTP -->|"URL d'accès temporaire après réservation"| FE
-    FE -->|"téléchargement du PDF autorisé"| SNAP
-
-    DB -->|"lecture des événements d'outbox créés avec la réservation"| OUTBOX
-    OUTBOX -->|"événement idempotent"| MAILQ
+    PDF --> DB
+    PDF --> SNAP
     MAILQ --> MAIL
-
-    ADMIN -->|"lecture des documents, liens et blocages"| DB
+    ADMIN --> DB
     DOC -. métriques .-> OBS
     COLLAB -. métriques .-> OBS
     PUB -. métriques .-> OBS
     PDF -. métriques .-> OBS
-    OUTBOX -. métriques .-> OBS
 
-    classDef datastore fill:#eef,stroke:#446;
-    class DB,PRESENCE,SNAP datastore;

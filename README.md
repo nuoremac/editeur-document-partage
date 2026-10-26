@@ -29,6 +29,8 @@ npm run dev:web
 
 Ouvrez ensuite <http://localhost:5173>. L’API écoute sur le port `3000` et PostgreSQL est publié sur le port `5433`. Un rédacteur peut créer un document, l’éditer et créer un lien public de téléchargement. Le rapport de conception en PDF se trouve dans `Dossier de conception/latex/main.pdf`.
 
+Le [guide de test de l’API](application/API.md) documente les routes, les corps JSON et les parcours de test pour le rédacteur, le visiteur et l’administrateur.
+
 Pour arrêter les services Docker :
 
 ```sh

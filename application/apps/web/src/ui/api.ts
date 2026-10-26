@@ -7,7 +7,14 @@ export type Link = { token: string; title: string; initial_limit: number; remain
 export type Credit = { used: number; limit: number; remaining: number };
 export type Version = { id: string; revision: number; title: string; created_by: string; created_at: string };
 export type ServerNotification = { id: string; type: string; title: string; message: string; created_at: string; state: string };
-export type AdminOverview = { metrics: { accounts: number; documents: number; links: number; reservations: number; pending_pdfs: number; pending_notifications: number }; people: { id: string; name: string; email: string; role: string; created_at: string; blocked: boolean }[]; recentReservations: { id: string; state: string; revision: number; created_at: string; title: string }[] };
+export type AdminOverview = {
+  metrics: { accounts: number; documents: number; links: number; active_links: number; open_documents: number; blocked_people: number; reservations: number; pending_pdfs: number; pending_notifications: number };
+  people: { id: string; name: string; email: string; role: string; created_at: string; blocked: boolean }[];
+  blockedPeople: { id: string; name: string; email: string; role: string; created_at: string; blocked: boolean }[];
+  activeLinks: { id: string; token: string; title: string; remaining: number; initial_limit: number; created_at: string; expires_at: string | null }[];
+  openDocuments: { id: string; title: string; revision: number; updated_at: string; editors: string[] }[];
+  recentReservations: { id: string; state: string; revision: number; created_at: string; title: string }[];
+};
 
 async function request<T>(path: string, person?: Person, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);

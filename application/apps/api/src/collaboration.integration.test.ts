@@ -5,6 +5,7 @@ import { after, test } from 'node:test';
 import { createServer } from 'node:http';
 import WebSocket from 'ws';
 import * as Y from 'yjs';
+import { Awareness, encodeAwarenessUpdate } from 'y-protocols/awareness';
 import app from './app.js';
 import { attachCollaboration } from './collaboration.js';
 import { pool } from './db.js';
@@ -38,11 +39,12 @@ function nextMessage(socket: WebSocket, type: string) {
 async function connectClient(url: string, cookie: string) {
   const socket = new WebSocket(url, { headers: { cookie } });
   sockets.push(socket);
+  const sync = nextMessage(socket, 'sync');
   await new Promise<void>((resolve, reject) => {
     socket.once('open', resolve);
     socket.once('error', reject);
   });
-  const initial = await nextMessage(socket, 'sync');
+  const initial = await sync;
   const document = new Y.Doc();
   Y.applyUpdate(document, Uint8Array.from(Buffer.from(String(initial.update), 'base64')));
   return { socket, document };
@@ -72,6 +74,13 @@ test('Yjs fusionne les éditions simultanées et synchronise le contenu durable'
   const document = await created.json() as { id: string };
   const url = `ws://127.0.0.1:${address.port}/ws/documents/${document.id}`;
   const [clientA, clientB] = await Promise.all([connectClient(url, cookie), connectClient(url, cookie)]);
+  const awareness = new Awareness(clientA.document);
+  awareness.setLocalStateField('user', { name: 'Test collaboration', color: '#123456' });
+  awareness.setLocalStateField('cursor', { index: 0 });
+  const remotePresence = nextMessage(clientB.socket, 'awareness');
+  clientA.socket.send(JSON.stringify({ type: 'awareness', update: Buffer.from(encodeAwarenessUpdate(awareness, [clientA.document.clientID])).toString('base64') }));
+  assert.ok((await remotePresence).update);
+  awareness.destroy();
   const acceptedA = nextMessage(clientA.socket, 'accepted');
   const acceptedB = nextMessage(clientB.socket, 'accepted');
   insertAtClient(clientA, 'A');

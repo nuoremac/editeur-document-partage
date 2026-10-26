@@ -1,4 +1,15 @@
 services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
   db:
     image: postgres:16-alpine
     environment:
@@ -20,11 +31,14 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
+      network: host
     environment:
       DATABASE_URL: postgres://journal:journal@db:5432/journal
       PORT: 3000
       API_BASE_URL: ${API_BASE_URL:-http://localhost:3000}
       WEB_ORIGIN: http://localhost:5173
+      WEB_ORIGINS: ${WEB_ORIGINS:-http://localhost:5173,http://localhost:5174}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       PUBLIC_BASE_URL: http://localhost:5173
       PDF_STORAGE_DIR: /app/data/pdfs
       ADMIN_EMAILS: ${ADMIN_EMAILS:-}
@@ -40,12 +54,15 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     command: ["sh", "-c", "npm run migrate && npm run start"]
 
   pdf-worker:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
+      network: host
     environment:
       DATABASE_URL: postgres://journal:journal@db:5432/journal
       PDF_STORAGE_DIR: /app/data/pdfs
@@ -63,3 +80,4 @@ services:
 volumes:
   postgres_data:
   pdf_data:
+  redis_data:

@@ -4,12 +4,18 @@ import type { Duplex } from 'node:stream';
 import type { PoolClient } from 'pg';
 import { WebSocket, WebSocketServer } from 'ws';
 import * as Y from 'yjs';
+import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate, removeAwarenessStates } from 'y-protocols/awareness';
 import { inTransaction, pool } from './db.js';
+import { publishRealtimeEvent, startRealtimeBus } from './realtime.js';
+import { recordCreditAbuse } from './abuse.js';
 
 const wsServer = new WebSocketServer({ noServer: true, maxPayload: 2_000_000 });
+const allowedWebOrigins = (process.env.WEB_ORIGINS ?? process.env.WEB_ORIGIN ?? 'http://localhost:5173')
+  .split(',').map((origin) => origin.trim()).filter(Boolean);
 type User = { id: string; name: string };
-type Room = { document: Y.Doc; clients: Set<{ socket: WebSocket; user: User }> };
+type Room = { document: Y.Doc; awareness: Awareness; clients: Set<{ socket: WebSocket; user: User; awarenessIds: Set<number> }> };
 const rooms = new Map<string, Promise<Room>>();
+const publicLinkSockets = new Map<string, Set<WebSocket>>();
 
 function reject(socket: Duplex, status: number, message: string) {
   socket.write(`HTTP/1.1 ${status} ${message}\r\nConnection: close\r\n\r\n`);
@@ -56,7 +62,18 @@ async function getRoom(documentId: string): Promise<Room> {
     });
     const document = new Y.Doc();
     Y.applyUpdate(document, initialState);
-    return { document, clients: new Set<{ socket: WebSocket; user: User }>() };
+    const awareness = new Awareness(document);
+    awareness.setLocalState(null);
+    const room: Room = { document, awareness, clients: new Set<{ socket: WebSocket; user: User; awarenessIds: Set<number> }>() };
+    awareness.on('update', ({ added, updated, removed }: { added: number[]; updated: number[]; removed: number[] }, origin: unknown) => {
+      const changed = [...added, ...updated, ...removed];
+      if (!changed.length) return;
+      const encoded = Buffer.from(encodeAwarenessUpdate(awareness, changed)).toString('base64');
+      for (const client of room.clients) if (client.socket !== origin) send(client.socket, { type: 'awareness', update: encoded });
+      if (origin !== 'redis') void publishRealtimeEvent('document-awareness', { documentId, update: encoded });
+      presence(room);
+    });
+    return room;
   })();
   rooms.set(documentId, roomPromise);
   try { return await roomPromise; }
@@ -68,7 +85,9 @@ function send(socket: WebSocket, message: object) {
 }
 
 function presence(room: Room) {
-  const users = [...new Map([...room.clients].map(({ user }) => [user.id, user.name])).values()];
+  const users = [...new Set([...room.awareness.getStates().values()]
+    .map((state) => (state as { user?: { name?: string } }).user?.name)
+    .filter((name): name is string => Boolean(name)))];
   for (const { socket } of room.clients) send(socket, { type: 'presence', users });
 }
 
@@ -144,15 +163,24 @@ export async function restoreCollaborativeText(client: PoolClient, documentId: s
 
 export async function broadcastDocumentUpdate(documentId: string, update: Uint8Array, revision: number) {
   const pending = rooms.get(documentId);
-  if (!pending) return;
-  const room = await pending;
-  Y.applyUpdate(room.document, update);
-  const encoded = Buffer.from(update).toString('base64');
-  for (const { socket } of room.clients) send(socket, { type: 'update', update: encoded, revision });
+  if (pending) {
+    const room = await pending;
+    Y.applyUpdate(room.document, update);
+    const encoded = Buffer.from(update).toString('base64');
+    for (const { socket } of room.clients) send(socket, { type: 'update', update: encoded, revision });
+  }
+  void publishRealtimeEvent('document-update', { documentId });
+}
+
+export function notifyLinkExhausted(token: string) {
+  for (const socket of publicLinkSockets.get(token) ?? []) send(socket, { type: 'link-exhausted' });
+  void publishRealtimeEvent('link-exhausted', { token });
 }
 
 async function acceptUpdate(documentId: string, user: User, operationId: string, update: Uint8Array) {
   return inTransaction(async (client) => {
+    const blocked = await client.query('SELECT 1 FROM temporary_blocks WHERE person_id = $1 AND starts_at <= now() AND ends_at > now() LIMIT 1', [user.id]);
+    if (blocked.rowCount) throw new Error('Votre compte est temporairement bloqué pour activité abusive.');
     const locked = await client.query('SELECT title, content FROM documents WHERE id = $1 FOR UPDATE', [documentId]);
     if (!locked.rowCount) throw new Error('Document introuvable.');
     const duplicate = await client.query(
@@ -208,13 +236,6 @@ async function acceptUpdate(documentId: string, user: User, operationId: string,
        ON CONFLICT (document_id) DO UPDATE SET state_update = EXCLUDED.state_update, updated_at = now()`,
       [documentId, Buffer.from(stateUpdate)],
     );
-    if (updated.rows[0].revision === 1 || updated.rows[0].revision % 100 === 0) {
-      await client.query(
-        `INSERT INTO document_versions (document_id, revision, title, content, state_update, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (document_id, revision) DO NOTHING`,
-        [documentId, updated.rows[0].revision, locked.rows[0].title, content, Buffer.from(stateUpdate), user.id],
-      );
-    }
     const credit = await client.query('SELECT used_chars, limit_chars FROM daily_credits WHERE person_id = $1 AND period = CURRENT_DATE', [user.id]);
     return {
       revision: updated.rows[0].revision,
@@ -227,17 +248,29 @@ async function acceptUpdate(documentId: string, user: User, operationId: string,
 
 async function connect(socket: WebSocket, documentId: string, user: User) {
   const room = await getRoom(documentId);
-  const client = { socket, user };
+  const client = { socket, user, awarenessIds: new Set<number>() };
   room.clients.add(client);
   socket.on('error', (error) => console.error('Erreur WebSocket collaborative.', error));
   send(socket, {
     type: 'sync',
     update: Buffer.from(Y.encodeStateAsUpdate(room.document)).toString('base64'),
   });
+  const awarenessIds = [...room.awareness.getStates().keys()].filter((id) => id !== room.document.clientID);
+  if (awarenessIds.length) send(socket, { type: 'awareness', update: Buffer.from(encodeAwarenessUpdate(room.awareness, awarenessIds)).toString('base64') });
   presence(room);
+  void publishRealtimeEvent('document-awareness-request', { documentId });
   socket.on('message', (raw) => {
     void (async () => {
       const message = JSON.parse(raw.toString()) as { type?: string; operationId?: string; update?: string };
+      if (message.type === 'awareness' && message.update) {
+        const bytes = new Uint8Array(Buffer.from(message.update, 'base64'));
+        if (bytes.length > 64_000) return;
+        const ids = decodeAwarenessIds(bytes);
+        if (ids.some((id) => [...room.clients].some((other) => other !== client && other.awarenessIds.has(id)))) return;
+        ids.forEach((id) => client.awarenessIds.add(id));
+        applyAwarenessUpdate(room.awareness, bytes, socket);
+        return;
+      }
       if (message.type !== 'update' || !message.operationId || !message.update || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(message.operationId)) return;
       const update = Buffer.from(message.update, 'base64');
       if (update.length > 900_000) throw new Error('Mise à jour trop volumineuse.');
@@ -251,11 +284,13 @@ async function connect(socket: WebSocket, documentId: string, user: User) {
           used: accepted.used, remaining: Math.max(0, accepted.limit - accepted.used),
         });
       }
-    })().catch((error: Error) => {
-      send(socket, { type: 'error', message: error.message });
+    })().catch(async (error: Error) => {
+      const abuse = /crédit quotidien|dépasse le crédit quotidien/i.test(error.message) ? await recordCreditAbuse(user.id, error.message) : undefined;
+      send(socket, { type: 'error', code: abuse?.blocked ? 'ACCOUNT_BLOCKED' : undefined, message: abuse?.blocked ? 'Compte temporairement bloqué après plusieurs tentatives de dépassement du crédit.' : error.message });
     });
   });
   socket.on('close', () => {
+    if (client.awarenessIds.size) removeAwarenessStates(room.awareness, [...client.awarenessIds], socket);
     room.clients.delete(client);
     presence(room);
     if (!room.clients.size) {
@@ -270,14 +305,74 @@ async function connect(socket: WebSocket, documentId: string, user: User) {
   });
 }
 
+function decodeAwarenessIds(update: Uint8Array): number[] {
+  let offset = 0;
+  const read = () => {
+    let value = 0; let multiplier = 1;
+    while (offset < update.length) { const byte = update[offset++]; value += (byte & 0x7f) * multiplier; if (byte < 0x80) return value; multiplier *= 128; if (multiplier > 2 ** 49) break; }
+    throw new Error('État de présence invalide.');
+  };
+  const count = read();
+  if (count > 20) throw new Error('Trop d’états de présence.');
+  const ids: number[] = [];
+  for (let index = 0; index < count; index++) { ids.push(read()); read(); const length = read(); offset += length; if (offset > update.length) throw new Error('État de présence invalide.'); }
+  if (offset !== update.length) throw new Error('État de présence invalide.');
+  return ids;
+}
+
 export function attachCollaboration(server: Server) {
+  void startRealtimeBus(async (event) => {
+    if (event.type === 'link-exhausted') {
+      const token = String(event.payload.token ?? '');
+      for (const socket of publicLinkSockets.get(token) ?? []) send(socket, { type: 'link-exhausted' });
+      return;
+    }
+    const documentId = String(event.payload.documentId ?? '');
+    const pending = rooms.get(documentId);
+    if (!pending) return;
+    const room = await pending;
+    if (event.type === 'document-awareness-request') {
+      const ids = [...room.awareness.getStates().keys()].filter((id) => id !== room.document.clientID);
+      if (ids.length) void publishRealtimeEvent('document-awareness', { documentId, update: Buffer.from(encodeAwarenessUpdate(room.awareness, ids)).toString('base64') }, event.origin);
+    } else if (event.type === 'document-awareness' && typeof event.payload.update === 'string') {
+      applyAwarenessUpdate(room.awareness, new Uint8Array(Buffer.from(event.payload.update, 'base64')), 'redis');
+    } else if (event.type === 'document-update') {
+      const result = await pool.query('SELECT y.state_update, d.revision::int AS revision FROM document_yjs_state y JOIN documents d ON d.id = y.document_id WHERE y.document_id = $1', [documentId]);
+      if (!result.rowCount) return;
+      const update = new Uint8Array(result.rows[0].state_update as Buffer);
+      Y.applyUpdate(room.document, update);
+      const encoded = Buffer.from(Y.encodeStateAsUpdate(room.document)).toString('base64');
+      for (const participant of room.clients) send(participant.socket, { type: 'update', update: encoded, revision: result.rows[0].revision });
+    }
+  });
   server.on('upgrade', (request, socket, head) => {
     void (async () => {
       const url = new URL(request.url ?? '/', 'http://localhost');
+      const publicMatch = url.pathname.match(/^\/ws\/public\/links\/([A-Za-z0-9_-]{20,100})$/);
+      if (publicMatch) {
+        const origin = request.headers.origin;
+        if (origin && !allowedWebOrigins.includes(origin)) return reject(socket, 403, 'Forbidden');
+        const token = publicMatch[1];
+        const link = await pool.query("SELECT state, remaining, expires_at FROM download_links WHERE token = $1", [token]);
+        if (!link.rowCount) return reject(socket, 404, 'Not Found');
+        wsServer.handleUpgrade(request, socket, head, (websocket) => {
+          const expired = link.rows[0].expires_at && new Date(link.rows[0].expires_at) <= new Date();
+          if (link.rows[0].state !== 'ACTIVE' || Number(link.rows[0].remaining) <= 0 || expired) {
+            send(websocket, { type: 'link-exhausted' });
+            websocket.close(1000, 'Lien épuisé ou expiré');
+            return;
+          }
+          const subscribers = publicLinkSockets.get(token) ?? new Set<WebSocket>();
+          subscribers.add(websocket); publicLinkSockets.set(token, subscribers);
+          websocket.on('close', () => { subscribers.delete(websocket); if (!subscribers.size) publicLinkSockets.delete(token); });
+          websocket.on('error', (error) => console.error('WebSocket visiteur.', error));
+        });
+        return;
+      }
       const match = url.pathname.match(/^\/ws\/documents\/([0-9a-f-]{36})$/i);
       if (!match) return reject(socket, 404, 'Not Found');
       const origin = request.headers.origin;
-      if (origin && origin !== (process.env.WEB_ORIGIN ?? 'http://localhost:5173')) return reject(socket, 403, 'Forbidden');
+      if (origin && !allowedWebOrigins.includes(origin)) return reject(socket, 403, 'Forbidden');
       const documentId = match[1];
       const user = await authenticate(request, documentId);
       if (!user) return reject(socket, 401, 'Unauthorized');
@@ -287,4 +382,25 @@ export function attachCollaboration(server: Server) {
       reject(socket, 500, 'Internal Server Error');
     });
   });
+}
+
+export async function getActiveCollaborativeDocuments() {
+  const activeRooms = await Promise.all([...rooms.entries()].map(async ([documentId, pending]) => {
+    const room = await pending;
+    const editors = [...new Map([...room.clients].map(({ user }) => [user.id, user.name])).values()];
+    return { documentId, editors };
+  }));
+  const connected = activeRooms.filter((room) => room.editors.length > 0);
+  if (!connected.length) return [];
+
+  const documents = await pool.query(
+    `SELECT id, title, revision::int AS revision, updated_at
+       FROM documents WHERE id = ANY($1::uuid[]) ORDER BY title`,
+    [connected.map((room) => room.documentId)],
+  );
+  const editorsByDocument = new Map(connected.map((room) => [room.documentId, room.editors]));
+  return documents.rows.map((document) => ({
+    ...document,
+    editors: editorsByDocument.get(document.id) ?? [],
+  }));
 }
