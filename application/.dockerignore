@@ -1,6 +1,11 @@
 .git
 .env
 **/.env
+.env.production
+.env.production.*
+**/.env.production
+**/.env.production.*
+!.env.production.example
 node_modules
 **/node_modules
 **/dist

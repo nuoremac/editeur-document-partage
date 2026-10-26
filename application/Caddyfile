@@ -1,0 +1,21 @@
+{
+    email {$ACME_EMAIL}
+}
+
+{$APP_DOMAIN} {
+    encode zstd gzip
+
+    @api path /api/* /health
+    handle @api {
+        reverse_proxy api:3000
+    }
+
+    @websocket path /ws/*
+    handle @websocket {
+        reverse_proxy api:3000
+    }
+
+    handle {
+        reverse_proxy web:80
+    }
+}

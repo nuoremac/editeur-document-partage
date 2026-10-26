@@ -320,7 +320,7 @@ function PublicDownload({ token }: { token: string }) {
   useEffect(() => {
     let active = true;
     api.publicLink(token).then((value) => { if (active) setLink(value); }).catch((error: Error) => { if (active) setStatus(error.message); });
-    const wsUrl = new URL(import.meta.env.VITE_API_URL ?? 'http://localhost:3000');
+    const wsUrl = new URL(import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3000' : window.location.origin));
     wsUrl.protocol = wsUrl.protocol === 'https:' ? 'wss:' : 'ws:';
     wsUrl.pathname = `/ws/public/links/${token}`; wsUrl.search = '';
     const socket = new WebSocket(wsUrl);

@@ -22,6 +22,36 @@ Si l’API tourne avec `npm run dev` hors de Docker, ajoutez `REDIS_URL=redis://
 
 Arrêt : `docker compose down`. Pour supprimer aussi la base et les PDF locaux : `docker compose down -v`.
 
+## Déploiement sur une instance AWS EC2
+
+Le fichier `compose.production.yml` démarre PostgreSQL, Redis, l’API, le worker PDF, le frontend compilé et Caddy. Caddy sert le frontend, transmet `/api`, `/health` et `/ws` à l’API et demande automatiquement un certificat HTTPS. Les ports PostgreSQL, Redis et API ne sont pas publiés sur Internet. Cette configuration vise une instance unique de démonstration ; elle ne fournit ni haute disponibilité ni preuve de capacité pour 15 000 visiteurs simultanés.
+
+Sur EC2, installez Docker Engine et le plugin Docker Compose, clonez le dépôt puis, depuis le dossier `application`, créez le fichier secret local :
+
+```sh
+cp .env.production.example .env.production
+openssl rand -hex 32
+```
+
+Utilisez des valeurs différentes générées par `openssl rand -hex 32` pour `POSTGRES_PASSWORD` et `REDIS_PASSWORD`. Choisissez également un mot de passe administrateur distinct d’au moins 12 caractères. Complétez `APP_DOMAIN`, `ACME_EMAIL`, `ADMIN_EMAILS`, `AWS_REGION` et `S3_BUCKET`, puis protégez le fichier avec `chmod 600 .env.production`. Le fichier `.env.production` est ignoré par Git et Docker : ne le commitez jamais.
+
+Avant le démarrage, créez un enregistrement DNS `A` vers l’adresse publique EC2 et autorisez les ports entrants 80 et 443 dans le groupe de sécurité. Autorisez le port 22 uniquement depuis votre adresse IP. Attachez à EC2 un rôle IAM donnant à l’application les droits nécessaires sur le bucket privé S3 et, si utilisée, la file SQS. N’ajoutez aucune clé AWS au fichier d’environnement ; le SDK utilise le rôle de l’instance. Pour les conteneurs, réglez les options de métadonnées de l’instance de façon à autoriser l’accès IMDSv2 depuis Docker.
+
+Vérifiez la configuration puis construisez et démarrez les services :
+
+```sh
+docker compose --env-file .env.production -f compose.production.yml config
+docker compose --env-file .env.production -f compose.production.yml up --build -d
+docker compose --env-file .env.production -f compose.production.yml ps
+docker compose --env-file .env.production -f compose.production.yml logs -f api caddy pdf-worker
+```
+
+Le certificat HTTPS ne sera émis que lorsque le DNS pointe vers EC2 et que les ports 80/443 sont joignables. Testez ensuite l’inscription, la connexion administrateur, l’édition collaborative, le partage public et le téléchargement PDF. Chiffrez également le volume EBS de l’instance. Les volumes Docker assurent la persistance lors d’un redémarrage, mais ne remplacent pas une sauvegarde.
+
+Le script `scripts/backup-production-db.sh` exporte PostgreSQL en format restaurable et envoie l’archive dans `s3://<bucket>/backups/postgresql/`. Installez AWS CLI sur EC2, accordez au rôle IAM `s3:PutObject` sur ce préfixe, puis testez le script manuellement avant de le planifier. Une sauvegarde n’est utile que si sa restauration est vérifiée ; configurez aussi une règle de cycle de vie S3 pour supprimer les anciennes archives selon la durée de conservation choisie.
+
+SES reste optionnel. Pour envoyer des e-mails à des destinataires réels, vérifiez l’identité d’expédition et demandez la sortie de sandbox SES dans la région configurée.
+
 ## Fonctionnalités disponibles
 
 - Comptes avec mot de passe, sessions serveur HttpOnly et rôles rédacteur/administrateur.
@@ -53,4 +83,4 @@ Le détail des routes, les formats JSON, les réponses attendues et des commande
 
 ## Travail restant
 
-Les intégrations SQS et SES sont optionnelles et demandent une file, une identité AWS et une adresse d’expédition configurées. Le worker conserve la file PostgreSQL comme source durable et solution de secours. Redis coordonne le temps réel entre processus API, mais le Compose fourni n’a qu’une API, un PostgreSQL et un Redis uniques, sans répartiteur de charge ni dimensionnement de production. La capacité de 15 000 visiteurs et 300 rédacteurs simultanés n’est donc pas encore démontrée : il faut déployer l’architecture dimensionnée et exécuter un test de charge instrumenté avant de la revendiquer. Le déploiement AWS complet, l’export PDF avec mise en forme, la vérification d’adresse e-mail et la récupération sécurisée de mot de passe restent aussi à réaliser.
+La configuration de déploiement EC2 est fournie, mais les ressources AWS, le DNS, le rôle IAM, SES et les sauvegardes planifiées doivent être configurés dans le compte avant la mise en ligne. Cette architecture à instance unique ne fournit pas de haute disponibilité et ne démontre pas la capacité de 15 000 visiteurs et 300 rédacteurs simultanés ; un déploiement dimensionné et un test de charge instrumenté seront nécessaires avant de revendiquer ces niveaux. L’export PDF avec mise en forme, la vérification d’adresse e-mail et la récupération sécurisée de mot de passe restent également à réaliser.

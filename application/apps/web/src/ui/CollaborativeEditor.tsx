@@ -40,7 +40,7 @@ export function CollaborativeEditor({ documentId, initialRevision, userName, onR
     const binding = new QuillBinding(ytext, quill, awareness);
     const updateCharacterCount = () => setCharCount(Array.from(ytext.toString()).length);
     ytext.observe(updateCharacterCount);
-    const apiUrl = new URL(import.meta.env.VITE_API_URL ?? 'http://localhost:3000');
+    const apiUrl = new URL(import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3000' : window.location.origin));
     apiUrl.protocol = apiUrl.protocol === 'https:' ? 'wss:' : 'ws:';
     apiUrl.pathname = `/ws/documents/${documentId}`;
     apiUrl.search = '';

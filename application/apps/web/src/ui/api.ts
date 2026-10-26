@@ -1,4 +1,4 @@
-const API = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
+const API = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3000' : window.location.origin);
 
 export type Person = { id: string; name: string; email: string; role: 'EDITOR' | 'ADMIN' };
 export type DocumentSummary = { id: string; title: string; revision: number; updated_at: string; role: string };

@@ -12,5 +12,7 @@ COPY apps/api/tsconfig.json ./tsconfig.json
 COPY apps/api/src ./src
 COPY db/init /app/db/init
 RUN npm run build && npm prune --omit=dev --workspace=@journal/api --include-workspace-root=false
+RUN mkdir -p /app/data/pdfs && chown -R node:node /app
+USER node
 EXPOSE 3000
 CMD ["npm", "run", "start"]
