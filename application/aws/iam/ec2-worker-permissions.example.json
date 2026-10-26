@@ -1,0 +1,26 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "StoreGeneratedPdfs",
+      "Effect": "Allow",
+      "Action": "s3:PutObject",
+      "Resource": "arn:aws:s3:::REPLACE_WITH_BUCKET_NAME/pdf/*"
+    },
+    {
+      "Sid": "ConsumePdfJobs",
+      "Effect": "Allow",
+      "Action": [
+        "sqs:ReceiveMessage",
+        "sqs:DeleteMessage"
+      ],
+      "Resource": "arn:aws:sqs:REPLACE_WITH_REGION:REPLACE_WITH_ACCOUNT_ID:REPLACE_WITH_QUEUE_NAME"
+    },
+    {
+      "Sid": "SendLastCopyEmails",
+      "Effect": "Allow",
+      "Action": "ses:SendEmail",
+      "Resource": "arn:aws:ses:REPLACE_WITH_REGION:REPLACE_WITH_ACCOUNT_ID:identity/REPLACE_WITH_VERIFIED_SENDER"
+    }
+  ]
+}

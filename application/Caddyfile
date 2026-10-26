@@ -7,15 +7,15 @@
 
     @api path /api/* /health
     handle @api {
-        reverse_proxy api:3000
+        reverse_proxy {$API_UPSTREAM}
     }
 
     @websocket path /ws/*
     handle @websocket {
-        reverse_proxy api:3000
+        reverse_proxy {$API_UPSTREAM}
     }
 
     handle {
-        reverse_proxy web:80
+        reverse_proxy {$WEB_UPSTREAM}
     }
 }

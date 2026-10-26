@@ -1,0 +1,29 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgres://${POSTGRES_USER:-atelier}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@${DATA_PRIVATE_IP:?Set DATA_PRIVATE_IP}:5432/${POSTGRES_DB:-atelier}
+      REDIS_URL: redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD}@${DATA_PRIVATE_IP:?Set DATA_PRIVATE_IP}:6379
+      WEB_ORIGINS: https://${APP_DOMAIN:?Set APP_DOMAIN}
+      API_BASE_URL: https://${APP_DOMAIN:?Set APP_DOMAIN}
+      PUBLIC_BASE_URL: https://${APP_DOMAIN:?Set APP_DOMAIN}
+      PDF_STORAGE_DIR: /app/data/pdfs
+      ADMIN_EMAILS: ${ADMIN_EMAILS:?Set ADMIN_EMAILS}
+      ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:?Set ADMIN_BOOTSTRAP_PASSWORD}
+      AWS_REGION: ${AWS_REGION:-eu-west-3}
+      S3_BUCKET: ${S3_BUCKET:?Set S3_BUCKET}
+      SQS_PDF_QUEUE_URL: ${SQS_PDF_QUEUE_URL:?Set SQS_PDF_QUEUE_URL}
+    ports:
+      - "${API_PRIVATE_IP:?Set API_PRIVATE_IP}:3000:3000"
+    command: ["sh", "-c", "npm run migrate && npm run start"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 45s

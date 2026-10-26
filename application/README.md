@@ -22,35 +22,95 @@ Si l’API tourne avec `npm run dev` hors de Docker, ajoutez `REDIS_URL=redis://
 
 Arrêt : `docker compose down`. Pour supprimer aussi la base et les PDF locaux : `docker compose down -v`.
 
-## Déploiement sur une instance AWS EC2
+## Déploiement AWS sur plusieurs instances EC2
 
-Le fichier `compose.production.yml` démarre PostgreSQL, Redis, l’API, le worker PDF, le frontend compilé et Caddy. Caddy sert le frontend, transmet `/api`, `/health` et `/ws` à l’API et demande automatiquement un certificat HTTPS. Les ports PostgreSQL, Redis et API ne sont pas publiés sur Internet. Cette configuration vise une instance unique de démonstration ; elle ne fournit ni haute disponibilité ni preuve de capacité pour 15 000 visiteurs simultanés.
+Le déploiement sépare les composants sur cinq EC2 pour attribuer un rôle IAM seulement aux hôtes qui en ont besoin :
 
-Sur EC2, installez Docker Engine et le plugin Docker Compose, clonez le dépôt puis, depuis le dossier `application`, créez le fichier secret local :
+Pour cette architecture, utilisez les quatre fichiers `compose.production-edge.yml`, `compose.production-app.yml`, `compose.production-worker.yml` et `compose.production-data.yml`. `compose.production.yml` est l’ancienne configuration monohôte conservée comme référence.
+
+- **EC2 Edge** : Caddy (HTTPS) et frontend statique ; aucun rôle IAM applicatif.
+- **EC2 API** : API HTTP et WebSocket ; rôle limité à la lecture des PDF dans S3 et à l’envoi des travaux dans SQS.
+- **EC2 Worker** : génération PDF et notifications ; rôle limité à l’écriture des PDF, à la consommation de la file SQS et à l’envoi SES (si activé).
+- **EC2 Données** : PostgreSQL et Redis ; aucun rôle IAM applicatif.
+- **EC2 Sauvegarde** : exécution planifiée de `pg_dump` et envoi vers S3 ; rôle limité à l’écriture sous `backups/postgresql/`.
+
+Cette séparation est au niveau des instances EC2 : tous les processus d’une même instance peuvent obtenir les droits du rôle associé. C’est pourquoi l’instance de sauvegarde est séparée de la base et l’instance Edge n’a pas de rôle applicatif. Aucun identifiant AWS permanent ne doit être créé ou placé dans le code, Git, les fichiers `.env` ou les User Data. Les SDK et AWS CLI utilisent les identifiants temporaires des rôles d’instance.
+
+### Règles réseau à configurer
+
+Créez les instances dans le même VPC. Seule l’instance Edge reçoit les connexions publiques. Les instances privées ont tout de même besoin d’un chemin sortant pour télécharger les images et joindre S3/SQS : configurez un NAT ou les endpoints VPC nécessaires, en tenant compte du coût du NAT. Pour un essai sans NAT, un sous-réseau public avec des groupes de sécurité strictement limités peut simplifier l’accès sortant ; ne donnez alors aucune règle entrante publique aux hôtes backend. Configurez les groupes de sécurité ainsi :
+
+| Groupe de sécurité | Entrées autorisées |
+| --- | --- |
+| Edge | TCP 80 et 443 depuis Internet ; SSH uniquement depuis votre IP `/32` ou Session Manager |
+| API | TCP 3000 depuis le groupe Edge uniquement ; administration limitée |
+| Worker | aucune entrée publique ; administration limitée |
+| Données | TCP 5432 depuis les groupes API, Worker et Sauvegarde ; TCP 6379 depuis API et Worker ; administration limitée |
+| Sauvegarde | aucune entrée publique ; administration limitée |
+
+Ne rendez jamais PostgreSQL, Redis ou le port 3000 accessibles depuis Internet. Utilisez des volumes EBS chiffrés, activez IMDSv2 et activez MFA pour les identités humaines. Dans S3, bloquez l’accès public et activez le chiffrement. Utilisez une file SQS dédiée au PDF, avec une file DLQ si possible.
+
+### Créer les rôles IAM
+
+Créez trois rôles de confiance EC2 à partir de `aws/iam/ec2-trust-policy.example.json` et attachez-les respectivement à API, Worker et Sauvegarde. Les exemples de politiques à personnaliser sont :
+
+- `aws/iam/ec2-api-permissions.example.json` pour l’API ;
+- `aws/iam/ec2-worker-permissions.example.json` pour le worker ;
+- `aws/iam/ec2-backup-permissions.example.json` pour l’instance de sauvegarde.
+
+Remplacez les ARN fictifs par ceux de vos ressources réelles. Si SES n’est pas activé, retirez son instruction de la politique Worker. L’instance Edge n’a pas besoin de droits AWS applicatifs. Si vous choisissez Session Manager pour administrer les EC2, ajoutez uniquement le rôle d’administration AWS requis pour ce service, séparément des permissions applicatives. N’attachez jamais `AdministratorAccess`.
+
+### Préparer les fichiers de configuration
+
+Clonez le dépôt sur chacune des cinq EC2 et installez Docker Engine avec le plugin Compose. Sur l’instance de sauvegarde, installez aussi AWS CLI. Dans `application/`, créez le fichier local correspondant au rôle de la machine :
 
 ```sh
-cp .env.production.example .env.production
-openssl rand -hex 32
+# Sur Edge
+cp .env.production-edge.example .env.production-edge
+
+# Sur API
+cp .env.production-app.example .env.production-app
+
+# Sur Worker
+cp .env.production-worker.example .env.production-worker
+
+# Sur Données
+cp .env.production-data.example .env.production-data
+
+# Sur Sauvegarde
+cp .env.production-backup.example .env.production-backup
 ```
 
-Utilisez des valeurs différentes générées par `openssl rand -hex 32` pour `POSTGRES_PASSWORD` et `REDIS_PASSWORD`. Choisissez également un mot de passe administrateur distinct d’au moins 12 caractères. Complétez `APP_DOMAIN`, `ACME_EMAIL`, `ADMIN_EMAILS`, `AWS_REGION` et `S3_BUCKET`, puis protégez le fichier avec `chmod 600 .env.production`. Le fichier `.env.production` est ignoré par Git et Docker : ne le commitez jamais.
+Remplacez les adresses d’exemple par les adresses privées fixes des EC2, complétez le domaine, l’adresse e-mail, les ARN/URL AWS et choisissez des secrets forts. Les paramètres PostgreSQL doivent être identiques sur API, Worker, Données et Sauvegarde ; le mot de passe Redis est nécessaire sur Données et API. Générez les secrets avec `openssl rand -hex 32`, protégez les fichiers avec `chmod 600 .env.production-*` et ne les commitez jamais. Utilisez une méthode sûre pour les transmettre aux hôtes concernés.
 
-Avant le démarrage, créez un enregistrement DNS `A` vers l’adresse publique EC2 et autorisez les ports entrants 80 et 443 dans le groupe de sécurité. Autorisez le port 22 uniquement depuis votre adresse IP. Attachez à EC2 un rôle IAM donnant à l’application les droits nécessaires sur le bucket privé S3 et, si utilisée, la file SQS. N’ajoutez aucune clé AWS au fichier d’environnement ; le SDK utilise le rôle de l’instance. Pour les conteneurs, réglez les options de métadonnées de l’instance de façon à autoriser l’accès IMDSv2 depuis Docker.
+### Démarrer les composants
 
-Vérifiez la configuration puis construisez et démarrez les services :
+Depuis `application/`, lancez la commande correspondant à chaque instance :
 
 ```sh
-docker compose --env-file .env.production -f compose.production.yml config
-docker compose --env-file .env.production -f compose.production.yml up --build -d
-docker compose --env-file .env.production -f compose.production.yml ps
-docker compose --env-file .env.production -f compose.production.yml logs -f api caddy pdf-worker
+# EC2 Données
+docker compose --env-file .env.production-data -f compose.production-data.yml up --build -d
+
+# EC2 API (après le démarrage de PostgreSQL et Redis)
+docker compose --env-file .env.production-app -f compose.production-app.yml up --build -d
+
+# EC2 Worker
+docker compose --env-file .env.production-worker -f compose.production-worker.yml up --build -d
+
+# EC2 Sauvegarde : pas de service permanent à démarrer
+# Elle exécute scripts/backup-production-db.sh selon la planification choisie.
+
+# EC2 Edge : le DNS A du domaine doit pointer vers son adresse publique
+docker compose --env-file .env.production-edge -f compose.production-edge.yml up --build -d
 ```
 
-Le certificat HTTPS ne sera émis que lorsque le DNS pointe vers EC2 et que les ports 80/443 sont joignables. Testez ensuite l’inscription, la connexion administrateur, l’édition collaborative, le partage public et le téléchargement PDF. Chiffrez également le volume EBS de l’instance. Les volumes Docker assurent la persistance lors d’un redémarrage, mais ne remplacent pas une sauvegarde.
+Les ports 5432 et 6379 sont liés à l’adresse privée de l’instance Données ; le groupe de sécurité doit aussi limiter ces flux aux instances API et Worker. Le port 3000 est lié à l’adresse privée de l’instance API et n’accepte que le groupe Edge. Caddy termine TLS sur Edge et transmet `/api`, `/health` et `/ws` à l’API privée. Vérifiez les services avec `docker compose ... ps` et les journaux de chaque hôte.
 
-Le script `scripts/backup-production-db.sh` exporte PostgreSQL en format restaurable et envoie l’archive dans `s3://<bucket>/backups/postgresql/`. Installez AWS CLI sur EC2, accordez au rôle IAM `s3:PutObject` sur ce préfixe, puis testez le script manuellement avant de le planifier. Une sauvegarde n’est utile que si sa restauration est vérifiée ; configurez aussi une règle de cycle de vie S3 pour supprimer les anciennes archives selon la durée de conservation choisie.
+### Sauvegarde PostgreSQL
 
-SES reste optionnel. Pour envoyer des e-mails à des destinataires réels, vérifiez l’identité d’expédition et demandez la sortie de sandbox SES dans la région configurée.
+Sur l’EC2 Sauvegarde, créez `.env.production-backup` depuis son modèle puis exécutez `scripts/backup-production-db.sh`. Le script se connecte à PostgreSQL par son adresse privée, lance `pg_dump` dans un conteneur client et envoie le flux vers S3 avec le rôle limité de cette instance. Planifiez-le avec cron après l’avoir testé manuellement. Testez aussi une restauration réelle avant de considérer les sauvegardes fiables.
+
+SES est facultatif. Pour envoyer des e-mails à de vraies adresses, vérifiez l’identité d’expédition et demandez la sortie du bac à sable SES dans la région choisie. Les coûts EC2, stockage, transferts, S3, SQS et SES varient avec la région et l’usage : surveillez AWS Budgets et les crédits avant de laisser les instances tourner. Cette architecture répartit les droits, mais ne constitue pas à elle seule une preuve de haute disponibilité ni de capacité à 15 000 visiteurs et 300 rédacteurs simultanés.
 
 ## Fonctionnalités disponibles
 
@@ -83,4 +143,4 @@ Le détail des routes, les formats JSON, les réponses attendues et des commande
 
 ## Travail restant
 
-La configuration de déploiement EC2 est fournie, mais les ressources AWS, le DNS, le rôle IAM, SES et les sauvegardes planifiées doivent être configurés dans le compte avant la mise en ligne. Cette architecture à instance unique ne fournit pas de haute disponibilité et ne démontre pas la capacité de 15 000 visiteurs et 300 rédacteurs simultanés ; un déploiement dimensionné et un test de charge instrumenté seront nécessaires avant de revendiquer ces niveaux. L’export PDF avec mise en forme, la vérification d’adresse e-mail et la récupération sécurisée de mot de passe restent également à réaliser.
+Les fichiers de déploiement multi-EC2 sont fournis, mais les ressources AWS, le DNS, les groupes de sécurité, les rôles IAM, SES et la planification des sauvegardes doivent être configurés dans le compte avant la mise en ligne. Cette architecture ne fournit pas à elle seule de haute disponibilité ni de preuve de capacité à 15 000 visiteurs et 300 rédacteurs simultanés ; un déploiement dimensionné et un test de charge instrumenté seront nécessaires avant de revendiquer ces niveaux. L’export PDF avec mise en forme, la vérification d’adresse e-mail et la récupération sécurisée de mot de passe restent également à réaliser.

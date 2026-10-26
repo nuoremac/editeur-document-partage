@@ -3,6 +3,8 @@ dist/
 .env
 .env.production
 .env.production.*
+.env.production-*
 !.env.production.example
+!.env.production-*.example
 data/
 coverage/

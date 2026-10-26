@@ -1,3 +1,5 @@
+# Ancienne configuration monohôte conservée comme référence. Pour le déploiement
+# multi-EC2 avec rôles séparés, utiliser les quatre compose.production-*.yml.
 services:
   db:
     image: postgres:16-alpine
@@ -101,6 +103,8 @@ services:
     environment:
       APP_DOMAIN: ${APP_DOMAIN:?Set APP_DOMAIN in .env.production}
       ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL in .env.production}
+      API_UPSTREAM: api:3000
+      WEB_UPSTREAM: web:80
     ports:
       - "80:80"
       - "443:443"

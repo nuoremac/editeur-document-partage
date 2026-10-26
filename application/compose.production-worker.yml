@@ -1,0 +1,15 @@
+services:
+  pdf-worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://${POSTGRES_USER:-atelier}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@${DATA_PRIVATE_IP:?Set DATA_PRIVATE_IP}:5432/${POSTGRES_DB:-atelier}
+      PDF_STORAGE_DIR: /app/data/pdfs
+      AWS_REGION: ${AWS_REGION:-eu-west-3}
+      S3_BUCKET: ${S3_BUCKET:?Set S3_BUCKET}
+      SQS_PDF_QUEUE_URL: ${SQS_PDF_QUEUE_URL:?Set SQS_PDF_QUEUE_URL}
+      SES_FROM_EMAIL: ${SES_FROM_EMAIL:-}
+    command: ["npm", "run", "worker"]
