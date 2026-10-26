@@ -35,7 +35,7 @@ export function CollaborativeEditor({ documentId, initialRevision, userName, onR
     const ytext = ydoc.getText('content');
     const quill = new Quill(editorRef.current!, {
       theme: 'snow', readOnly: true, placeholder: 'Commencez à écrire ici…',
-      modules: { cursors: { hideDelayMs: 60_000, hideSpeedMs: 0 }, toolbar: [[{ header: [1, 2, false] }], ['bold', 'italic', 'underline'], [{ list: 'ordered' }, { list: 'bullet' }], ['blockquote', 'link']] },
+      modules: { cursors: { hideDelayMs: 60_000, hideSpeedMs: 0 }, toolbar: [[{ header: [1, 2, false] }], ['bold', 'italic', 'underline'], [{ list: 'ordered' }, { list: 'bullet' }], ['blockquote']] },
     });
     const binding = new QuillBinding(ytext, quill, awareness);
     const updateCharacterCount = () => setCharCount(Array.from(ytext.toString()).length);
@@ -108,6 +108,6 @@ export function CollaborativeEditor({ documentId, initialRevision, userName, onR
     };
   }, [documentId, reconnect, userName]);
 
-  return <div className="editor-card"><div ref={editorRef} aria-label="Éditeur collaboratif" />{!synced && <div className="editor-overlay">{status}</div>}<div className="editor-footer"><span>{charCount.toLocaleString('fr-FR')} caractères · révision {revision}</span><span title={participants.join(', ')}>{participants.length > 0 ? `Présents : ${participants.join(', ')}` : status}</span></div></div>;
+  return <div className="editor-card"><div className="editor-canvas"><div ref={editorRef} aria-label="Éditeur collaboratif" />{!synced && <div className="editor-overlay">{status}</div>}</div><div className="editor-footer"><span>{charCount.toLocaleString('fr-FR')} caractères · révision {revision}</span><span title={participants.join(', ')}>{participants.length > 0 ? `Présents : ${participants.join(', ')}` : status}</span></div></div>;
 }
 

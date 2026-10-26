@@ -34,3 +34,16 @@
 .admin-empty{padding:13px 15px;border:1px solid #e7ebe8;background:#fff;font-size:11px}.admin-link{padding:7px 10px;color:#28664f;text-decoration:none;font-size:10px}
 .auth-screen{position:relative;isolation:isolate;overflow:hidden}.auth-screen::before{content:"";position:absolute;z-index:-1;right:max(2vw,calc(50% - 590px));top:50%;width:min(44vw,560px);height:min(76vh,760px);min-width:320px;min-height:460px;transform:translateY(-50%);background:url('/watermark.svg') center/contain no-repeat;opacity:.14;pointer-events:none}.auth-screen>.entry-card{position:relative;z-index:1}@media(max-width:620px){.auth-screen::before{right:-90px;width:360px;height:560px;min-width:0;min-height:0;opacity:.08}}
 .document-editor-main .ql-container .ql-cursor .ql-cursor-flag{z-index:5;opacity:1!important;visibility:visible!important;transition:none!important}
+
+/* Filigrane de marque visible uniquement dans la zone de rédaction. */
+.document-editor-main .editor-canvas{position:relative;isolation:isolate}
+.document-editor-main .editor-canvas::before{content:"";position:absolute;z-index:0;pointer-events:none;left:50%;top:58px;bottom:0;width:min(42vw,460px);transform:translateX(-50%);background:url('/watermark.svg') center 46%/contain no-repeat;opacity:.075}
+.document-editor-main .editor-canvas>div:first-child{position:relative;z-index:1}
+.document-editor-main .editor-canvas .ql-container,.document-editor-main .editor-canvas .ql-editor{background:transparent}
+@media(max-width:700px){.document-editor-main .editor-canvas::before{width:min(76vw,360px);opacity:.055}}
+
+/* Filigrane discret sur l’espace « Mes documents ». */
+.content-area-documents{position:relative;isolation:isolate;overflow:hidden}
+.content-area-documents::before{content:"";position:absolute;z-index:0;pointer-events:none;right:3vw;top:50%;width:min(42vw,520px);height:min(72vh,650px);min-height:360px;transform:translateY(-42%);background:url('/watermark.svg') center/contain no-repeat;opacity:.07}
+.content-area-documents>*{position:relative;z-index:1}
+@media(max-width:620px){.content-area-documents::before{right:-90px;width:340px;height:500px;min-height:0;opacity:.045}}

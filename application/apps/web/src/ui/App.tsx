@@ -157,7 +157,7 @@ function Workspace() {
       <div className="sidebar-bottom"><NotificationButton items={notifications.items} onRead={notifications.markRead} onReadAll={notifications.markAllRead} /><div className="avatar">{person.name.slice(0, 1).toUpperCase()}</div><div className="user-info"><strong>{person.name}</strong><span>Rédacteur</span></div><button className="quiet logout-button" type="button" title="Se déconnecter" aria-label="Se déconnecter" onClick={async () => { await api.logout(); localStorage.removeItem(PERSON_KEY); setPerson(null); setOpened(null); }}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 4h7v16h-7"/><path d="M3 12h11m-4-4 4 4-4 4"/></svg></button></div>
     </aside>
     <main className="main-area">
-      <div className={`content-area ${opened ? 'content-area-document' : ''}`}>
+      <div className={`content-area ${opened ? 'content-area-document' : 'content-area-documents'}`}>
         {problem && <div className="alert error">{problem}<button className="quiet" onClick={() => setProblem('')}>×</button></div>}
         {notice && <div className="alert success">{notice}<button className="quiet" onClick={() => setNotice('')}>×</button></div>}
         {opened ? <DocumentView document={opened} person={person} busy={busy} onBack={() => setOpened(null)} onCreateLink={createLink} onNotice={announce} onProblem={reportProblem} onRevision={(revision) => setOpened((current) => current ? { ...current, revision } : current)} onCreditUpdate={refresh} onRestored={(doc) => { setOpened(doc); announce('Version restaurée.'); refresh(); }} /> : <>
