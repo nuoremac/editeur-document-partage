@@ -1,8 +1,4 @@
-{
-    email {$ACME_EMAIL}
-}
-
-{$APP_DOMAIN} {
+{$APP_SCHEME}://{$APP_DOMAIN} {
     encode zstd gzip
 
     @api path /api/* /health

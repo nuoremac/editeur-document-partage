@@ -15,8 +15,8 @@ services:
     image: caddy:2-alpine
     restart: unless-stopped
     environment:
-      APP_DOMAIN: ${APP_DOMAIN:?Set APP_DOMAIN}
-      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
+      APP_DOMAIN: ${APP_DOMAIN:?Set APP_DOMAIN to the edge domain or public IP}
+      APP_SCHEME: ${APP_SCHEME:-https}
       API_UPSTREAM: ${API_PRIVATE_IP:?Set API_PRIVATE_IP}:3000
       WEB_UPSTREAM: web:80
     ports:
