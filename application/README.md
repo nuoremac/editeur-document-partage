@@ -24,11 +24,13 @@ Arrêt : `docker compose down`. Pour supprimer aussi la base et les PDF locaux :
 
 ## Déploiement AWS sur plusieurs instances EC2
 
+Une fois l’instance Edge déployée et configurée, l’application est accessible à l’adresse **http://16.171.5.130**. Cette adresse IP publique est temporaire : AWS peut la remplacer si l’instance Edge est arrêtée puis redémarrée. Pour conserver une adresse stable, associez une Elastic IP à l’instance Edge. L’accès actuel est en HTTP ; le HTTPS nécessitera un nom de domaine contrôlé par le projet et un certificat valide.
+
 Le déploiement sépare les composants sur cinq EC2 pour attribuer un rôle IAM seulement aux hôtes qui en ont besoin :
 
 Pour cette architecture, utilisez les quatre fichiers `compose.production-edge.yml`, `compose.production-app.yml`, `compose.production-worker.yml` et `compose.production-data.yml`. `compose.production.yml` est l’ancienne configuration monohôte conservée comme référence.
 
-- **EC2 Edge** : Caddy (HTTPS) et frontend statique ; aucun rôle IAM applicatif.
+- **EC2 Edge** : Caddy et frontend statique ; aucun rôle IAM applicatif. Pour l’accès temporaire par IP, Caddy sert l’application en HTTP.
 - **EC2 API** : API HTTP et WebSocket ; rôle limité à la lecture des PDF dans S3 et à l’envoi des travaux dans SQS.
 - **EC2 Worker** : génération PDF et notifications ; rôle limité à l’écriture des PDF, à la consommation de la file SQS et à l’envoi SES (si activé).
 - **EC2 Données** : PostgreSQL et Redis ; aucun rôle IAM applicatif.
@@ -100,7 +102,7 @@ docker compose --env-file .env.production-worker -f compose.production-worker.ym
 # EC2 Sauvegarde : pas de service permanent à démarrer
 # Elle exécute scripts/backup-production-db.sh selon la planification choisie.
 
-# EC2 Edge : le DNS A du domaine doit pointer vers son adresse publique
+# EC2 Edge : l’application est accessible en HTTP sur http://16.171.5.130
 docker compose --env-file .env.production-edge -f compose.production-edge.yml up --build -d
 ```
 
