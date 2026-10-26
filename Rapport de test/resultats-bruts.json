@@ -1,0 +1,75 @@
+{
+  "date": "2026-10-26",
+  "environment": {
+    "node": "v22.22.0",
+    "npm": "10.9.4",
+    "postgresql": "16.15",
+    "logical_cpu_count": 16,
+    "visible_memory_gib_approx": 15,
+    "scope": "local development environment; no AWS run"
+  },
+  "build": {
+    "command": "npm run build",
+    "api": "passed",
+    "web": "passed"
+  },
+  "integration_tests": {
+    "command": "npm test",
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "total_duration_ms": 30957.528,
+    "cases": [
+      {"name": "Yjs concurrent edits, persistence and presence", "result": "passed", "duration_ms": 160.696},
+      {"name": "concurrent link quota, idempotency and shared credit", "result": "passed", "duration_ms": 353.992},
+      {"name": "sessions, roles and administration", "result": "passed", "duration_ms": 148.618}
+    ]
+  },
+  "http_load": [
+    {
+      "scenario": "health",
+      "requests": 1000,
+      "concurrency": 40,
+      "elapsed_ms": 652.3,
+      "requests_per_second": 1533.2,
+      "latency_ms": {"p50": 20.9, "p95": 67.1, "p99": 103.1},
+      "statuses": {"200": 1000}
+    },
+    {
+      "scenario": "public_link_read",
+      "requests": 1000,
+      "concurrency": 40,
+      "elapsed_ms": 439.5,
+      "requests_per_second": 2275.2,
+      "latency_ms": {"p50": 16.8, "p95": 25.0, "p99": 26.8},
+      "statuses": {"200": 1000}
+    }
+  ],
+  "websocket": {
+    "scenario": "simultaneous_initial_sync",
+    "connections_requested": 300,
+    "initial_sync_received": 300,
+    "failures": 0,
+    "elapsed_ms": 827.8,
+    "connections_per_second": 362.4,
+    "latency_ms": {"p50": 311.0, "p95": 742.7, "p99": 791.6},
+    "identity_count": 1
+  },
+  "pdf_end_to_end": {
+    "reservation_status": 202,
+    "final_state": "READY",
+    "revision": 1,
+    "download_status": 200,
+    "pdf_signature": "%PDF-",
+    "size_bytes": 1576,
+    "processing_and_polling_ms": 511.6,
+    "quota_uses_consumed": 1
+  },
+  "required_capacity_campaign": {
+    "target_visitors": 15000,
+    "target_visitors_in_first_minute": 12000,
+    "target_concurrent_editors": 300,
+    "executed": false,
+    "reason": "The local test did not reproduce the AWS deployment or the visitor reservation/PDF workload; claiming target capacity from health or read-only tests would be invalid."
+  }
+}

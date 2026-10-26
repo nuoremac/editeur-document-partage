@@ -1,0 +1,52 @@
+{
+  "date": "2026-10-26T01:10:22.017Z",
+  "target": "http://127.0.0.1:3000",
+  "test_data": "Un compte, un document et un lien isolés; aucune réservation de téléchargement.",
+  "http": [
+    {
+      "scenario": "health",
+      "requests": 1000,
+      "concurrency": 40,
+      "elapsed_ms": 652.3,
+      "requests_per_second": 1533.2,
+      "latency_ms": {
+        "p50": 20.9,
+        "p95": 67.1,
+        "p99": 103.1
+      },
+      "statuses": {
+        "200": 1000
+      }
+    },
+    {
+      "scenario": "public_link_read",
+      "requests": 1000,
+      "concurrency": 40,
+      "elapsed_ms": 439.5,
+      "requests_per_second": 2275.2,
+      "latency_ms": {
+        "p50": 16.8,
+        "p95": 25,
+        "p99": 26.8
+      },
+      "statuses": {
+        "200": 1000
+      }
+    }
+  ],
+  "websocket": {
+    "scenario": "simultaneous_initial_sync",
+    "connections_requested": 300,
+    "initial_sync_received": 300,
+    "failures": 0,
+    "elapsed_ms": 827.8,
+    "connections_per_second": 362.4,
+    "latency_ms": {
+      "p50": 311,
+      "p95": 742.7,
+      "p99": 791.6
+    },
+    "identity_count": 1,
+    "failure_samples": []
+  }
+}

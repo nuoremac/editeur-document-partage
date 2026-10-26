@@ -1,0 +1,23 @@
+
+> build
+> npm run build --workspace @journal/api && npm run build --workspace @journal/web
+
+
+> @journal/api@0.1.0 build
+> tsc -p tsconfig.json
+
+
+> @journal/web@0.1.0 build
+> tsc --noEmit -p tsconfig.json && vite build
+
+vite v6.4.5 building for production...
+transforming...
+✓ 796 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                 0.47 kB │ gzip:   0.31 kB
+dist/assets/index-9FlNPluZ.css                 17.94 kB │ gzip:   4.53 kB
+dist/assets/CollaborativeEditor-dkj_jvEW.css   25.72 kB │ gzip:   4.03 kB
+dist/assets/index-CMcorQtp.js                 250.99 kB │ gzip:  77.67 kB
+dist/assets/CollaborativeEditor-D7_q8s8E.js   356.37 kB │ gzip: 109.24 kB
+✓ built in 2.54s

@@ -1,0 +1,13 @@
+{
+  "date": "2026-10-26T01:11:02.385Z",
+  "target": "http://127.0.0.1:3000",
+  "reservation_status": 202,
+  "status_poll_http": 200,
+  "final_state": "READY",
+  "revision": "1",
+  "download_status": 200,
+  "pdf_signature": "%PDF-",
+  "file_bytes": 1576,
+  "processing_and_polling_ms": 511.6,
+  "quota_uses_consumed": 1
+}

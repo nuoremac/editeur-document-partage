@@ -1,0 +1,41 @@
+
+> test
+> npm run test --workspace @journal/api
+
+
+> @journal/api@0.1.0 test
+> npm run migrate && DOTENV_CONFIG_PATH=../../.env tsx --test src/*.integration.test.ts
+
+
+> @journal/api@0.1.0 migrate
+> DOTENV_CONFIG_PATH=../../.env node src/migrate.js
+
+Schéma PostgreSQL à jour.
+TAP version 13
+# Subtest: Yjs fusionne les éditions simultanées et synchronise le contenu durable
+ok 1 - Yjs fusionne les éditions simultanées et synchronise le contenu durable
+  ---
+  duration_ms: 160.695939
+  type: 'test'
+  ...
+# Subtest: les réservations concurrentes ne dépassent jamais la limite et sont idempotentes
+ok 2 - les réservations concurrentes ne dépassent jamais la limite et sont idempotentes
+  ---
+  duration_ms: 353.992388
+  type: 'test'
+  ...
+# Subtest: les sessions protègent les comptes et le tableau de bord administrateur
+ok 3 - les sessions protègent les comptes et le tableau de bord administrateur
+  ---
+  duration_ms: 148.617061
+  type: 'test'
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 3
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 30957.528358

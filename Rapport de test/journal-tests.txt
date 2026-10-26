@@ -1,0 +1,28 @@
+Campagne locale du 26 octobre 2026
+
+Compilation
+Commande : npm run build
+Résultat : API TypeScript compilée; interface TypeScript/Vite construite; code de sortie 0.
+
+Tests d'intégration
+Commande : npm test
+Résultat : 3 tests réussis, 0 échec, 0 ignoré; durée totale 30957.528 ms.
+Yjs édition concurrente/persistance/présence : réussi (160.696 ms).
+Quota concurrent/idempotence/crédit partagé : réussi (353.992 ms).
+Sessions/rôles/administration : réussi (148.618 ms).
+
+Lectures HTTP (40 requêtes simultanées; 1 000 requêtes par scénario)
+/health : 1 000 x HTTP 200; 652.3 ms au total; 1533.2 req/s; p50 20.9 ms; p95 67.1 ms; p99 103.1 ms.
+Lecture publique d'un lien : 1 000 x HTTP 200; 439.5 ms au total; 2275.2 req/s; p50 16.8 ms; p95 25.0 ms; p99 26.8 ms.
+
+Connexions WebSocket
+300 connexions demandées; 300 synchronisations initiales reçues; 0 échec.
+Durée 827.8 ms; 362.4 connexions/s; p50 311.0 ms; p95 742.7 ms; p99 791.6 ms.
+Ces connexions utilisent une identité de test unique.
+
+PDF
+Réservation HTTP 202; état READY; révision 1; téléchargement HTTP 200.
+Signature %PDF- reconnue; taille 1 576 octets; état prêt puis téléchargement en 511.6 ms; une utilisation consommée.
+
+Non exécuté
+La charge cible de 15 000 visiteurs (12 000 durant la première minute) et 300 rédacteurs actifs n'a pas été simulée. Aucun résultat AWS/S3/SQS/SES ni métrique de coût n'est inclus.
